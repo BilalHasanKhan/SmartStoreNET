@@ -18,6 +18,7 @@ using SmartStore.Core.Domain.Seo;
 using SmartStore.Core.Domain.Media;
 using SmartStore.Services.Stores;
 using SmartStore.Core.Domain.Stores;
+using SmartStore.Core;
 
 namespace SmartStore.Services.ExportImport
 {
@@ -152,134 +153,140 @@ namespace SmartStore.Services.ExportImport
 
 			using (var scope = new DbContextScope(ctx: _rsProduct.Context, autoDetectChanges: false, proxyCreation: false, validateOnSave: false))
 			{
-				using (var segmenter = new DataSegmenter<Product>(stream))
-				{
-					result.TotalRecords = segmenter.TotalRows;
+                try { 
+				    using (var segmenter = new DataSegmenter<Product>(stream))
+				    {
+					    result.TotalRecords = segmenter.TotalRows;
 
-					while (segmenter.ReadNextBatch() && !cancellationToken.IsCancellationRequested)
-					{
-						var batch = segmenter.CurrentBatch;
+					    while (segmenter.ReadNextBatch() && !cancellationToken.IsCancellationRequested)
+					    {
+						    var batch = segmenter.CurrentBatch;
 
-						// Perf: detach all entities
-						_rsProduct.Context.DetachAll();
+						    // Perf: detach all entities
+						    _rsProduct.Context.DetachAll(false);
 
-						// Update progress for calling thread
-						if (progress != null)
-						{
-							progress.Report(new ImportProgressInfo
-							{
-								TotalRecords = result.TotalRecords,
-								TotalProcessed = segmenter.CurrentSegmentFirstRowIndex - 1,
-								NewRecords = result.NewRecords,
-								ModifiedRecords = result.ModifiedRecords,
-								ElapsedTime = DateTime.UtcNow - result.StartDateUtc,
-								TotalWarnings = result.Messages.Count(x => x.MessageType == ImportMessageType.Warning),
-								TotalErrors = result.Messages.Count(x => x.MessageType == ImportMessageType.Error),
-							});
-						}
+						    // Update progress for calling thread
+						    if (progress != null)
+						    {
+							    progress.Report(new ImportProgressInfo
+							    {
+								    TotalRecords = result.TotalRecords,
+								    TotalProcessed = segmenter.CurrentSegmentFirstRowIndex - 1,
+								    NewRecords = result.NewRecords,
+								    ModifiedRecords = result.ModifiedRecords,
+								    ElapsedTime = DateTime.UtcNow - result.StartDateUtc,
+								    TotalWarnings = result.Messages.Count(x => x.MessageType == ImportMessageType.Warning),
+								    TotalErrors = result.Messages.Count(x => x.MessageType == ImportMessageType.Error),
+							    });
+						    }
 
-						// ===========================================================================
-						// 1.) Import products
-						// ===========================================================================
-						try
-						{
-							saved = ProcessProducts(batch, result);
-						}
-						catch (Exception ex)
-						{
-							result.AddError(ex, segmenter.CurrentSegment, "ProcessProducts");
-						}
+						    // ===========================================================================
+						    // 1.) Import products
+						    // ===========================================================================
+						    try
+						    {
+							    saved = ProcessProducts(batch, result);
+						    }
+						    catch (Exception ex)
+						    {
+							    result.AddError(ex, segmenter.CurrentSegment, "ProcessProducts");
+						    }
 
-						// reduce batch to saved (valid) products.
-						// No need to perform import operations on errored products.
-						batch = batch.Where(x => x.Entity != null && !x.IsTransient).AsReadOnly();
+						    // reduce batch to saved (valid) products.
+						    // No need to perform import operations on errored products.
+						    batch = batch.Where(x => x.Entity != null && !x.IsTransient).AsReadOnly();
 
-						// update result object
-						result.NewRecords += batch.Count(x => x.IsNew && !x.IsTransient);
-						result.ModifiedRecords += batch.Count(x => !x.IsNew && !x.IsTransient);
+						    // update result object
+						    result.NewRecords += batch.Count(x => x.IsNew && !x.IsTransient);
+						    result.ModifiedRecords += batch.Count(x => !x.IsNew && !x.IsTransient);
 
-						// ===========================================================================
-						// 2.) Import SEO Slugs
-						// IMPORTANT: Unlike with Products AutoCommitEnabled must be TRUE,
-						//            as Slugs are going to be validated against existing ones in DB.
-						// ===========================================================================
-						if (batch.Any(x => x.IsNew || (x.ContainsKey("SeName") || x.NameChanged)))
-						{
-							try
-							{
-								_rsProduct.Context.AutoDetectChangesEnabled = true;
-								ProcessSlugs(batch, result);
-							}
-							catch (Exception ex)
-							{
-								result.AddError(ex, segmenter.CurrentSegment, "ProcessSeoSlugs");
-							}
-							finally
-							{
-								_rsProduct.Context.AutoDetectChangesEnabled = false;
-							}
-						}
+						    // ===========================================================================
+						    // 2.) Import SEO Slugs
+						    // IMPORTANT: Unlike with Products AutoCommitEnabled must be TRUE,
+						    //            as Slugs are going to be validated against existing ones in DB.
+						    // ===========================================================================
+						    if (batch.Any(x => x.IsNew || (x.ContainsKey("SeName") || x.NameChanged)))
+						    {
+							    try
+							    {
+								    _rsProduct.Context.AutoDetectChangesEnabled = true;
+								    ProcessSlugs(batch, result);
+							    }
+							    catch (Exception ex)
+							    {
+								    result.AddError(ex, segmenter.CurrentSegment, "ProcessSeoSlugs");
+							    }
+							    finally
+							    {
+								    _rsProduct.Context.AutoDetectChangesEnabled = false;
+							    }
+						    }
 
-						// ===========================================================================
-						// 3.) Import Localizations
-						// ===========================================================================
-						try
-						{
-							ProcessLocalizations(batch, result);
-						}
-						catch (Exception ex)
-						{
-							result.AddError(ex, segmenter.CurrentSegment, "ProcessLocalizations");
-						}
+						    // ===========================================================================
+						    // 3.) Import Localizations
+						    // ===========================================================================
+						    try
+						    {
+							    ProcessLocalizations(batch, result);
+						    }
+						    catch (Exception ex)
+						    {
+							    result.AddError(ex, segmenter.CurrentSegment, "ProcessLocalizations");
+						    }
 
-						// ===========================================================================
-						// 4.) Import product category mappings
-						// ===========================================================================
-						if (batch.Any(x => x.ContainsKey("CategoryIds")))
-						{
-							try
-							{
-								ProcessProductCategories(batch, result);
-							}
-							catch (Exception ex)
-							{
-								result.AddError(ex, segmenter.CurrentSegment, "ProcessProductCategories");
-							}
-						}
+						    // ===========================================================================
+						    // 4.) Import product category mappings
+						    // ===========================================================================
+						    if (batch.Any(x => x.ContainsKey("CategoryIds")))
+						    {
+							    try
+							    {
+								    ProcessProductCategories(batch, result);
+							    }
+							    catch (Exception ex)
+							    {
+								    result.AddError(ex, segmenter.CurrentSegment, "ProcessProductCategories");
+							    }
+						    }
 
-						// ===========================================================================
-						// 5.) Import product manufacturer mappings
-						// ===========================================================================
-						if (batch.Any(x => x.ContainsKey("ManufacturerIds")))
-						{
-							try
-							{
-								ProcessProductManufacturers(batch, result);
-							}
-							catch (Exception ex)
-							{
-								result.AddError(ex, segmenter.CurrentSegment, "ProcessProductManufacturers");
-							}
-						}
+						    // ===========================================================================
+						    // 5.) Import product manufacturer mappings
+						    // ===========================================================================
+						    if (batch.Any(x => x.ContainsKey("ManufacturerIds")))
+						    {
+							    try
+							    {
+								    ProcessProductManufacturers(batch, result);
+							    }
+							    catch (Exception ex)
+							    {
+								    result.AddError(ex, segmenter.CurrentSegment, "ProcessProductManufacturers");
+							    }
+						    }
                         
 
-						// ===========================================================================
-						// 6.) Import product picture mappings
-						// ===========================================================================
-						if (batch.Any(x => x.ContainsKey("Picture1") || x.ContainsKey("Picture2") || x.ContainsKey("Picture3")))
-						{
-							try
-							{
-								ProcessProductPictures(batch, result);
-							}
-							catch (Exception ex)
-							{
-								result.AddError(ex, segmenter.CurrentSegment, "ProcessProductPictures");
-							}
-						}
+						    // ===========================================================================
+						    // 6.) Import product picture mappings
+						    // ===========================================================================
+						    if (batch.Any(x => x.ContainsKey("Picture1") || x.ContainsKey("Picture2") || x.ContainsKey("Picture3")))
+						    {
+							    try
+							    {
+								    ProcessProductPictures(batch, result);
+							    }
+							    catch (Exception ex)
+							    {
+								    result.AddError(ex, segmenter.CurrentSegment, "ProcessProductPictures");
+							    }
+						    }
 
-					}
-				}
+					    }
+				    }
+                }
+                catch (Exception ex)
+                {
+                    result.AddError(ex, null, "ReadFile");
+                }
 			}
 
 			result.EndDateUtc = DateTime.UtcNow;
@@ -360,6 +367,7 @@ namespace SmartStore.Services.ExportImport
 				row.SetProperty(result, product, (x) => x.FullDescription);
 				row.SetProperty(result, product, (x) => x.ProductTemplateId);
 				row.SetProperty(result, product, (x) => x.ShowOnHomePage);
+				row.SetProperty(result, product, (x) => x.HomePageDisplayOrder);
 				row.SetProperty(result, product, (x) => x.MetaKeywords);
 				row.SetProperty(result, product, (x) => x.MetaDescription);
 				row.SetProperty(result, product, (x) => x.MetaTitle);
@@ -603,7 +611,7 @@ namespace SmartStore.Services.ExportImport
 								var category = _categoryService.GetCategoryById(id);
 								if (category != null)
 								{
-									var productCategory = new ProductCategory()
+									var productCategory = new ProductCategory
 									{
 										ProductId = row.Entity.Id,
 										CategoryId = category.Id,
@@ -654,7 +662,7 @@ namespace SmartStore.Services.ExportImport
 								var manufacturer = _manufacturerService.GetManufacturerById(id);
 								if (manufacturer != null)
 								{
-									var productManufacturer = new ProductManufacturer()
+									var productManufacturer = new ProductManufacturer
 									{
 										ProductId = row.Entity.Id,
 										ManufacturerId = manufacturer.Id,
@@ -718,10 +726,10 @@ namespace SmartStore.Services.ExportImport
 						if (pictureBinary != null && pictureBinary.Length > 0)
 						{
 							// no equal picture found in sequence
-							var newPicture = _pictureService.InsertPicture(pictureBinary, "image/jpeg", _pictureService.GetPictureSeName(row.EntityDisplayName), true, true);
+							var newPicture = _pictureService.InsertPicture(pictureBinary, "image/jpeg", _pictureService.GetPictureSeName(row.EntityDisplayName), true, false, false);
 							if (newPicture != null)
 							{
-								var mapping = new ProductPicture()
+								var mapping = new ProductPicture
 								{
 									ProductId = row.Entity.Id,
 									PictureId = newPicture.Id,

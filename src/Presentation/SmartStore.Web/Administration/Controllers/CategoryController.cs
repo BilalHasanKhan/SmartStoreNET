@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Web.Mvc;
 using SmartStore.Admin.Models.Catalog;
@@ -15,6 +16,7 @@ using SmartStore.Services.Common;
 using SmartStore.Services.Customers;
 using SmartStore.Services.Discounts;
 using SmartStore.Services.ExportImport;
+using SmartStore.Services.Filter;
 using SmartStore.Services.Helpers;
 using SmartStore.Services.Localization;
 using SmartStore.Services.Media;
@@ -56,6 +58,7 @@ namespace SmartStore.Admin.Controllers
         private readonly AdminAreaSettings _adminAreaSettings;
         private readonly CatalogSettings _catalogSettings;
 		private readonly IEventPublisher _eventPublisher;
+        private readonly IFilterService _filterService;
 
         #endregion
 
@@ -73,7 +76,7 @@ namespace SmartStore.Admin.Controllers
 			IDateTimeHelper dateTimeHelper,
 			AdminAreaSettings adminAreaSettings,
             CatalogSettings catalogSettings,
-			IEventPublisher eventPublisher)
+            IEventPublisher eventPublisher, IFilterService filterService)
         {
             this._categoryService = categoryService;
             this._categoryTemplateService = categoryTemplateService;
@@ -97,6 +100,7 @@ namespace SmartStore.Admin.Controllers
             this._adminAreaSettings = adminAreaSettings;
             this._catalogSettings = catalogSettings;
 			this._eventPublisher = eventPublisher;
+            this._filterService = filterService;
         }
 
         #endregion
@@ -519,6 +523,9 @@ namespace SmartStore.Admin.Controllers
                 var category = model.ToEntity();
                 category.CreatedOnUtc = DateTime.UtcNow;
                 category.UpdatedOnUtc = DateTime.UtcNow;
+
+				MediaHelper.UpdatePictureTransientStateFor(category, c => c.PictureId);
+
                 _categoryService.InsertCategory(category);
                 
 				//search engine name
@@ -634,15 +641,20 @@ namespace SmartStore.Admin.Controllers
 
             if (ModelState.IsValid)
             {
-				int prevPictureId = category.PictureId.GetValueOrDefault();
                 category = model.ToEntity(category);
+
+				MediaHelper.UpdatePictureTransientStateFor(category, c => c.PictureId);
+
                 category.UpdatedOnUtc = DateTime.UtcNow;
                 _categoryService.UpdateCategory(category);
+
                 //search engine name
                 model.SeName = category.ValidateSeName(model.SeName, category.Name, true);
                 _urlRecordService.SaveSlug(category, model.SeName, 0);
+
                 //locales
                 UpdateLocales(category, model);
+
                 //discounts
                 var allDiscounts = _discountService.GetAllDiscounts(DiscountType.AssignedToCategories, null, true);
                 foreach (var discount in allDiscounts)
@@ -664,14 +676,6 @@ namespace SmartStore.Admin.Controllers
 
                 //update "HasDiscountsApplied" property
                 _categoryService.UpdateHasDiscountsApplied(category);
-
-                //delete an old picture (if deleted or updated)
-                if (prevPictureId > 0 && prevPictureId != category.PictureId)
-                {
-                    var prevPicture = _pictureService.GetPictureById(prevPictureId);
-                    if (prevPicture != null)
-                        _pictureService.DeletePicture(prevPicture);
-                }
 
                 //update picture seo file name
                 UpdatePictureSeoNames(category);
@@ -713,12 +717,28 @@ namespace SmartStore.Admin.Controllers
             return View(model);
         }
 
+        [ValidateInput(false)]
+        public ActionResult InheritAclIntoChildren(int categoryId)
+        {
+            _categoryService.InheritAclIntoChildren(categoryId, false, true, false);
+
+            return RedirectToAction("Edit", "Category", new { id = categoryId });
+        }
+
+        [ValidateInput(false)]
+        public ActionResult InheritStoresIntoChildren(int categoryId)
+        {
+            _categoryService.InheritStoresIntoChildren(categoryId, false, true, false);
+
+            return RedirectToAction("Edit", "Category", new { id = categoryId });
+        }
+
         [HttpPost]
 		public ActionResult Delete(int id, string deleteType)
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCatalog))
                 return AccessDeniedView();
-
+			
             var category = _categoryService.GetCategoryById(id);
             if (category == null)
                 return RedirectToAction("List");
@@ -764,29 +784,35 @@ namespace SmartStore.Admin.Controllers
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCatalog))
                 return AccessDeniedView();
             
-            var productCategories = _categoryService.GetProductCategoriesByCategoryId(categoryId,
-                command.Page - 1, command.PageSize, true);
+            var productCategories = _categoryService.GetProductCategoriesByCategoryId(categoryId, command.Page - 1, command.PageSize, true);
+
+			var products = _productService.GetProductsByIds(productCategories.Select(x => x.ProductId).ToArray());
 
             var model = new GridModel<CategoryModel.CategoryProductModel>
             {
-                Data = productCategories
-                .Select(x =>
+                Data = productCategories.Select(x =>
                 {
-					var product = _productService.GetProductById(x.ProductId);
+					var productModel = new CategoryModel.CategoryProductModel
+					{
+						Id = x.Id,
+						CategoryId = x.CategoryId,
+						ProductId = x.ProductId,
+						IsFeaturedProduct = x.IsFeaturedProduct,
+						DisplayOrder1 = x.DisplayOrder
+					};
 
-                    return new CategoryModel.CategoryProductModel()
-                    {
-                        Id = x.Id,
-                        CategoryId = x.CategoryId,
-                        ProductId = x.ProductId,
-                        ProductName = product.Name,
-						Sku = product.Sku,
-						ProductTypeName = product.GetProductTypeLabel(_localizationService),
-						ProductTypeLabelHint = product.ProductTypeLabelHint,
-						Published = product.Published,
-                        IsFeaturedProduct = x.IsFeaturedProduct,
-                        DisplayOrder1 = x.DisplayOrder
-                    };
+					var product = products.FirstOrDefault(y => y.Id == x.ProductId);
+
+					if (product != null)
+					{
+						productModel.ProductName = product.Name;
+						productModel.Sku = product.Sku;
+						productModel.ProductTypeName = product.GetProductTypeLabel(_localizationService);
+						productModel.ProductTypeLabelHint = product.ProductTypeLabelHint;
+						productModel.Published = product.Published;
+					}
+					
+					return productModel;
                 }),
                 Total = productCategories.TotalCount
             };

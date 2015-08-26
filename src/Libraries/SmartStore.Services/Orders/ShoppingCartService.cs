@@ -548,7 +548,7 @@ namespace SmartStore.Services.Orders
 			{
 				var combination = product
 					.ProductVariantAttributeCombinations
-					.FirstOrDefault(x => _productAttributeParser.AreProductAttributesEqual(x.AttributesXml, selectedAttributes));
+					.FirstOrDefault(x => _productAttributeParser.AreProductAttributesEqual(x.AttributesXml, selectedAttributes, pva1Collection));
 
 				if (combination != null && !combination.IsActive)
 				{
@@ -589,6 +589,58 @@ namespace SmartStore.Services.Orders
 			}
 
             return warnings;
+        }
+
+        /// <summary>
+        /// Validates if all required attributes are selected
+        /// </summary>
+        /// <param name="selectedAttributes">Selected attributes</param>
+        /// <param name="product">Product</param>
+        /// <returns>bool</returns>
+        public virtual bool AreAllAttributesForCombinationSelected(string selectedAttributes, Product product) 
+        {
+            if (product.ProductVariantAttributeCombinations.Count == 0)
+                return true;
+
+            //selected attributes
+            var pva1Collection = _productAttributeParser.ParseProductVariantAttributes(selectedAttributes);
+
+            //existing product attributes
+            var pva2Collection = product.ProductVariantAttributes;
+            foreach (var pva2 in pva2Collection)
+            {
+                if (pva2.IsRequired)
+                {
+                    bool found = false;
+                    //selected product attributes
+                    foreach (var pva1 in pva1Collection)
+                    {
+                        if (pva1.Id == pva2.Id)
+                        {
+                            var pvaValuesStr = _productAttributeParser.ParseValues(selectedAttributes, pva1.Id);
+                            foreach (string str1 in pvaValuesStr)
+                            {
+                                if (!String.IsNullOrEmpty(str1.Trim()))
+                                {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!found)
+                    {
+                        return found;
+                    }
+                }
+                else
+                {
+                    return true;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>
