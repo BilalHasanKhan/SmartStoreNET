@@ -284,6 +284,10 @@ namespace SmartStore.Web.Framework
             var yearsList = new TagBuilder("select");
 			yearsList.MergeAttribute("style", "width: 90px");
 
+            daysList.Attributes.Add("data-native-menu", "false");
+            monthsList.Attributes.Add("data-native-menu", "false");
+            yearsList.Attributes.Add("data-native-menu", "false");
+
             daysList.Attributes.Add("name", dayName);
             monthsList.Attributes.Add("name", monthName);
             yearsList.Attributes.Add("name", yearName);
@@ -621,6 +625,55 @@ namespace SmartStore.Web.Framework
 			);
 
 			return MvcHtmlString.Create(result);
+		}
+
+		public static MvcHtmlString IconForFileExtension(this HtmlHelper helper, string fileExtension, bool renderExtensionText)
+		{
+			string result = "";
+
+			if (fileExtension != null && fileExtension.StartsWith("."))
+			{
+				fileExtension = fileExtension.Substring(1);
+			}
+
+			if (fileExtension.IsCaseInsensitiveEqual("xml"))
+			{
+				result = "<i class='fa fa-file-code-o' title='{0}'></i>";
+			}
+			else if (fileExtension.IsCaseInsensitiveEqual("xls") || fileExtension.IsCaseInsensitiveEqual("xlsx"))
+			{
+				result = "<i class='fa fa-file-excel-o' title='{0}'></i>";
+			}
+			else if (fileExtension.IsCaseInsensitiveEqual("pdf"))
+			{
+				result = "<i class='fa fa-file-pdf-o' title='{0}'></i>";
+			}
+			else if (fileExtension.IsCaseInsensitiveEqual("zip"))
+			{
+				result = "<i class='fa fa-file-archive-o' title='{0}'></i>";
+			}
+			else if (fileExtension.IsCaseInsensitiveEqual("txt") || fileExtension.IsCaseInsensitiveEqual("csv"))
+			{
+				result = "<i class='fa fa-file-text-o' title='{0}'></i>";
+			}
+			else if (fileExtension.IsCaseInsensitiveEqual("doc"))
+			{
+				result = "<i class='fa fa-file-word-o' title='{0}'></i>";
+			}
+			else if (fileExtension.IsCaseInsensitiveEqual("jpg") || fileExtension.IsCaseInsensitiveEqual("png") || fileExtension.IsCaseInsensitiveEqual("gif"))
+			{
+				result = "<i class='fa fa-file-image-o' title='{0}'></i>";
+			}
+
+			if (renderExtensionText)
+			{
+				if (fileExtension.IsEmpty())
+					result = "<span class='muted'>{0}</span>".FormatInvariant("".NaIfEmpty());
+				else
+					result = result + "<span class='ml4'>{0}</span>";
+			}
+
+			return MvcHtmlString.Create(result.FormatInvariant(fileExtension.NaIfEmpty().ToUpper()));
 		}
     }
 }

@@ -24,6 +24,7 @@ namespace SmartStore.Services.Tests.Customers
         IRepository<Customer> _customerRepo;
         IRepository<CustomerRole> _customerRoleRepo;
         IRepository<GenericAttribute> _genericAttributeRepo;
+		IRepository<RewardPointsHistory> _rewardPointsHistoryRepo;
         IGenericAttributeService _genericAttributeService;
         IEncryptionService _encryptionService;
         ICustomerService _customerService;
@@ -35,6 +36,7 @@ namespace SmartStore.Services.Tests.Customers
         RewardPointsSettings _rewardPointsSettings;
         SecuritySettings _securitySettings;
 		IStoreContext _storeContext;
+		IWebHelper _webHelper;
 
         [SetUp]
         public new void SetUp()
@@ -111,15 +113,17 @@ namespace SmartStore.Services.Tests.Customers
 
             _customerRoleRepo = MockRepository.GenerateMock<IRepository<CustomerRole>>();
             _genericAttributeRepo = MockRepository.GenerateMock<IRepository<GenericAttribute>>();
+			_rewardPointsHistoryRepo = MockRepository.GenerateMock<IRepository<RewardPointsHistory>>();
 
             _genericAttributeService = MockRepository.GenerateMock<IGenericAttributeService>();
             _newsLetterSubscriptionService = MockRepository.GenerateMock<INewsLetterSubscriptionService>();
             
             _localizationService = MockRepository.GenerateMock<ILocalizationService>();
 			_storeContext = MockRepository.GenerateMock<IStoreContext>();
+			_webHelper = MockRepository.GenerateMock<IWebHelper>();
 
             _customerService = new CustomerService(new NullCache(), _customerRepo, _customerRoleRepo,
-                _genericAttributeRepo, _genericAttributeService, _eventPublisher, _rewardPointsSettings);
+                _genericAttributeRepo, _rewardPointsHistoryRepo, _genericAttributeService, _eventPublisher, _rewardPointsSettings, _webHelper);
 
             _customerRegistrationService = new CustomerRegistrationService(_customerService,
                 _encryptionService, _newsLetterSubscriptionService, _localizationService,

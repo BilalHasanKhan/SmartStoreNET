@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Mime;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,12 +22,12 @@ using SmartStore.Core.Domain.Orders;
 using SmartStore.Core.Domain.Seo;
 using SmartStore.Core.Events;
 using SmartStore.Core.Infrastructure;
-using SmartStore.Core.Localization;
 using SmartStore.Core.Logging;
 using SmartStore.Services;
 using SmartStore.Services.Catalog;
 using SmartStore.Services.Common;
 using SmartStore.Services.Customers;
+using SmartStore.Services.DataExchange.ExportProvider;
 using SmartStore.Services.Directory;
 using SmartStore.Services.Discounts;
 using SmartStore.Services.ExportImport;
@@ -69,7 +68,6 @@ namespace SmartStore.Admin.Controllers
         private readonly ITaxCategoryService _taxCategoryService;
         private readonly IProductTagService _productTagService;
         private readonly ICopyProductService _copyProductService;
-        private readonly IExportManager _exportManager;
         private readonly ICustomerActivityService _customerActivityService;
         private readonly IPermissionService _permissionService;
         private readonly IAclService _aclService;
@@ -80,6 +78,7 @@ namespace SmartStore.Admin.Controllers
 		private readonly IDateTimeHelper _dateTimeHelper;
 		private readonly IDiscountService _discountService;
 		private readonly IProductAttributeService _productAttributeService;
+		private readonly IRepository<ProductVariantAttributeCombination> _pvacRepository;
 		private readonly IBackInStockSubscriptionService _backInStockSubscriptionService;
 		private readonly IShoppingCartService _shoppingCartService;
 		private readonly IProductAttributeFormatter _productAttributeFormatter;
@@ -120,7 +119,6 @@ namespace SmartStore.Admin.Controllers
             ITaxCategoryService taxCategoryService,
 			IProductTagService productTagService,
             ICopyProductService copyProductService,
-            IExportManager exportManager,
 			IImportManager importManager,
             ICustomerActivityService customerActivityService,
             IPermissionService permissionService,
@@ -132,7 +130,8 @@ namespace SmartStore.Admin.Controllers
 			IDateTimeHelper dateTimeHelper,
 			IDiscountService discountService,
 			IProductAttributeService productAttributeService,
-			IBackInStockSubscriptionService backInStockSubscriptionService,
+			IRepository<ProductVariantAttributeCombination> pvacRepository,
+            IBackInStockSubscriptionService backInStockSubscriptionService,
 			IShoppingCartService shoppingCartService,
 			IProductAttributeFormatter productAttributeFormatter,
 			IProductAttributeParser productAttributeParser,
@@ -167,7 +166,6 @@ namespace SmartStore.Admin.Controllers
             this._taxCategoryService = taxCategoryService;
             this._productTagService = productTagService;
             this._copyProductService = copyProductService;
-            this._exportManager = exportManager;
             this._customerActivityService = customerActivityService;
             this._permissionService = permissionService;
             this._aclService = aclService;
@@ -178,6 +176,7 @@ namespace SmartStore.Admin.Controllers
 			this._dateTimeHelper = dateTimeHelper;
 			this._discountService = discountService;
 			this._productAttributeService = productAttributeService;
+			this._pvacRepository = pvacRepository;
 			this._backInStockSubscriptionService = backInStockSubscriptionService;
 			this._shoppingCartService = shoppingCartService;
 			this._productAttributeFormatter = productAttributeFormatter;
@@ -655,7 +654,25 @@ namespace SmartStore.Admin.Controllers
 				model.CreatedOn = _dateTimeHelper.ConvertToUserTime(product.CreatedOnUtc, DateTimeKind.Utc);
 				model.UpdatedOn = _dateTimeHelper.ConvertToUserTime(product.UpdatedOnUtc, DateTimeKind.Utc);
 
-				model.ProductUrl = Url.RouteUrl("Product", new { SeName = product.GetSeName() }, Request.Url.Scheme);
+				if (product.LimitedToStores)
+				{
+					var storeMappings = _storeMappingService.GetStoreMappings(product);
+					if (storeMappings.FirstOrDefault(x => x.StoreId == _services.StoreContext.CurrentStore.Id) == null)
+					{
+						var storeMapping = storeMappings.FirstOrDefault();
+						if (storeMapping != null)
+						{
+							var store = _services.StoreService.GetStoreById(storeMapping.StoreId);
+							if (store != null)
+								model.ProductUrl = store.Url.EnsureEndsWith("/") + product.GetSeName(); 
+						}
+					}
+				}
+
+				if (model.ProductUrl.IsEmpty())
+				{
+					model.ProductUrl = Url.RouteUrl("Product", new { SeName = product.GetSeName() }, Request.Url.Scheme);
+				}
 			}
 
 			model.PrimaryStoreCurrencyCode = _services.StoreContext.CurrentStore.PrimaryStoreCurrency.CurrencyCode;
@@ -679,7 +696,7 @@ namespace SmartStore.Admin.Controllers
 			var templates = _productTemplateService.GetAllProductTemplates();
 			foreach (var template in templates)
 			{
-				model.AvailableProductTemplates.Add(new SelectListItem()
+				model.AvailableProductTemplates.Add(new SelectListItem
 				{
 					Text = template.Name,
 					Value = template.Id.ToString()
@@ -690,7 +707,7 @@ namespace SmartStore.Admin.Controllers
 			var allTags = _productTagService.GetAllProductTagNames();
 			foreach (var tag in allTags)
 			{
-				model.AvailableProductTags.Add(new SelectListItem() { Text = tag, Value = tag });
+				model.AvailableProductTags.Add(new SelectListItem { Text = tag, Value = tag });
 			}
 
 			if (product != null)
@@ -703,7 +720,7 @@ namespace SmartStore.Admin.Controllers
 			var taxCategories = _taxCategoryService.GetAllTaxCategories();
 			foreach (var tc in taxCategories)
 			{
-				model.AvailableTaxCategories.Add(new SelectListItem()
+				model.AvailableTaxCategories.Add(new SelectListItem
 				{
 					Text = tc.Name,
 					Value = tc.Id.ToString(),
@@ -715,7 +732,7 @@ namespace SmartStore.Admin.Controllers
 			var deliveryTimes = _deliveryTimesService.GetAllDeliveryTimes();
 			foreach (var dt in deliveryTimes)
 			{
-				model.AvailableDeliveryTimes.Add(new SelectListItem()
+				model.AvailableDeliveryTimes.Add(new SelectListItem
 				{
 					Text = dt.Name,
 					Value = dt.Id.ToString(),
@@ -727,7 +744,7 @@ namespace SmartStore.Admin.Controllers
             var quantityUnits = _quantityUnitService.GetAllQuantityUnits();
             foreach (var mu in quantityUnits)
             {
-                model.AvailableQuantityUnits.Add(new SelectListItem()
+                model.AvailableQuantityUnits.Add(new SelectListItem
                 {
                     Text = mu.Name,
                     Value = mu.Id.ToString(),
@@ -747,7 +764,7 @@ namespace SmartStore.Admin.Controllers
 
             foreach (var mu in measureUnits)
 			{
-				model.AvailableMeasureUnits.Add(new SelectListItem()
+				model.AvailableMeasureUnits.Add(new SelectListItem
 				{
 					Text = mu,
 					Value = mu,
@@ -787,7 +804,7 @@ namespace SmartStore.Admin.Controllers
 
 			foreach (var inventoryMethod in inventoryMethods)
 			{
-				model.AvailableManageInventoryMethods.Add(new SelectListItem()
+				model.AvailableManageInventoryMethods.Add(new SelectListItem
 				{
 					Value = ((int)inventoryMethod).ToString(),
 					Text = inventoryMethod.GetLocalizedEnum(_localizationService, _workContext),
@@ -2771,137 +2788,40 @@ namespace SmartStore.Admin.Controllers
 
         #region Export / Import
 
+		[Compress]
         public ActionResult ExportXmlAll()
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCatalog))
                 return AccessDeniedView();
 
-            try
-            {
-				using (var scope = new DbContextScope(_dbContext, autoDetectChanges: false, forceNoTracking: true))
-				{
-					var searchContext = new ProductSearchContext
-					{
-						LanguageId = _workContext.WorkingLanguage.Id,
-						OrderBy = ProductSortingEnum.Position,
-						PageSize = 100,
-						ShowHidden = true
-					};
-
-					var stream = new MemoryStream();
-					_exportManager.ExportProductsToXml(stream, searchContext);
-
-					var result = new FileStreamResult(stream, MediaTypeNames.Text.Xml);
-					result.FileDownloadName = string.Format("products_{0}.xml", DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"));
-
-					return result;
-				}
-            }
-            catch (Exception exc)
-            {
-                NotifyError(exc);
-            }
-			return RedirectToAction("List");
+			return Export(ExportProductXmlProvider.SystemName, null);
         }
 
-		[HttpPost]
+		[HttpPost, Compress]
         public ActionResult ExportXmlSelected(string selectedIds)
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCatalog))
                 return AccessDeniedView();
 
-            try
-            {
-				using (var scope = new DbContextScope(_dbContext, autoDetectChanges: false, forceNoTracking: true))
-				{
-					var searchContext = new ProductSearchContext
-					{
-						LanguageId = _workContext.WorkingLanguage.Id,
-						OrderBy = ProductSortingEnum.Position,
-						PageSize = 100,
-						ShowHidden = true
-					};
-
-					searchContext.ProductIds = selectedIds
-						.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-						.Select(x => Convert.ToInt32(x))
-						.ToList();
-
-					var stream = new MemoryStream();
-					_exportManager.ExportProductsToXml(stream, searchContext);
-
-					var result = new FileStreamResult(stream, MediaTypeNames.Text.Xml);
-					result.FileDownloadName = string.Format("products_{0}.xml", DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss"));
-
-					return result;
-				}
-			}
-			catch (Exception exc)
-			{
-				NotifyError(exc);
-			}
-			return RedirectToAction("List");
+			return Export(ExportProductXmlProvider.SystemName, selectedIds);
         }
 
+		[Compress]
         public ActionResult ExportExcelAll()
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCatalog))
                 return AccessDeniedView();
 
-            try
-            {
-				using (var scope = new DbContextScope(_dbContext, autoDetectChanges: false, forceNoTracking: true))
-				{
-					var ctx = new ProductSearchContext();
-					ctx.LanguageId = _workContext.WorkingLanguage.Id;
-					ctx.OrderBy = ProductSortingEnum.Position;
-					ctx.PageSize = int.MaxValue;
-					ctx.ShowHidden = true;
-
-					var products = _productService.SearchProducts(ctx);
-
-					byte[] bytes = null;
-					using (var stream = new MemoryStream())
-					{
-						_exportManager.ExportProductsToXlsx(stream, products);
-						bytes = stream.ToArray();
-					}
-					return File(bytes, "text/xls", "products.xlsx");
-				}
-            }
-            catch (Exception exc)
-            {
-                NotifyError(exc);
-                return RedirectToAction("List");
-            }
+			return Export(ExportProductXlsxProvider.SystemName, null);
         }
 
-		[HttpPost]
+		[HttpPost, Compress]
         public ActionResult ExportExcelSelected(string selectedIds)
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCatalog))
                 return AccessDeniedView();
 
-			using (var scope = new DbContextScope(_dbContext, autoDetectChanges: false, forceNoTracking: true))
-			{
-				var products = new List<Product>();
-				if (selectedIds != null)
-				{
-					var ids = selectedIds
-						.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-						.Select(x => Convert.ToInt32(x))
-						.ToArray();
-					products.AddRange(_productService.GetProductsByIds(ids));
-				}
-
-				byte[] bytes = null;
-				using (var stream = new MemoryStream())
-				{
-					_exportManager.ExportProductsToXlsx(stream, products);
-					bytes = stream.ToArray();
-				}
-				return File(bytes, "text/xls", "products.xlsx");
-			}
+			return Export(ExportProductXlsxProvider.SystemName, selectedIds);
         }
 
 		public ActionResult ExportPdf(bool all, string selectedIds = null)
@@ -2914,35 +2834,45 @@ namespace SmartStore.Admin.Controllers
 				NotifyInfo(T("Admin.Common.ExportNoData"));
 				return RedirectToAction("List");
 			}
-            
-            IList<Product> products;
+
+			const int maxProducts = 500;
+			int totalCount = 0;
+            IPagedList<Product> products;
 
 			using (var scope = new DbContextScope(_dbContext, autoDetectChanges: false, forceNoTracking: true))
 			{
-				if (all)
+				var searchContext = new ProductSearchContext
 				{
-					products = _productService.SearchProducts(new ProductSearchContext
-					{
-						LanguageId = _workContext.WorkingLanguage.Id,
-						OrderBy = ProductSortingEnum.Position,
-						PageSize = int.MaxValue,
-						ShowHidden = true
-					});
+					LanguageId = _workContext.WorkingLanguage.Id,
+					OrderBy = ProductSortingEnum.Position,
+					PageSize = 1,
+					ShowHidden = true
+				};
+
+				if (!all)
+				{
+					searchContext.ProductIds = selectedIds.ToIntArray().ToList();
 				}
-				else
+
+				products = _productService.SearchProducts(searchContext);
+
+				totalCount = products.TotalCount;
+
+				if (totalCount > 0 && totalCount <= maxProducts)
 				{
-					var ids = selectedIds.ToIntArray();
-					products = _productService.GetProductsByIds(ids);
+					searchContext.PageSize = int.MaxValue;
+
+					products = _productService.SearchProducts(searchContext);
 				}
 			}
 
-			if (products.Count == 0)
+			if (totalCount == 0)
 			{
 				NotifyInfo(T("Admin.Common.ExportNoData"));
 				return RedirectToAction("List");
 			}
 
-			if (products.Count > 500)
+			if (totalCount > maxProducts)
 			{
 				NotifyWarning(T("Admin.Common.ExportToPdf.TooManyItems"));
 				return RedirectToAction("List");
@@ -4064,11 +3994,14 @@ namespace SmartStore.Admin.Controllers
 
 		#region Product variant attribute combinations
 
-		private void PrepareProductAttributeCombinationModel(ProductVariantAttributeCombinationModel model, ProductVariantAttributeCombination entity,
+		private void PrepareProductAttributeCombinationModel(
+			ProductVariantAttributeCombinationModel model, 
+			ProductVariantAttributeCombination entity,
 			Product product, bool formatAttributes = false)
 		{
 			if (model == null)
 				throw new ArgumentNullException("model");
+			
 			if (product == null)
 				throw new ArgumentNullException("variant");
 
@@ -4168,24 +4101,23 @@ namespace SmartStore.Admin.Controllers
 			if (product == null)
 				throw new ArgumentException("No product found with the specified id");
 
-			var productVariantAttributeCombinations = _productAttributeService.GetAllProductVariantAttributeCombinations(productId);
+			var allCombinations = _productAttributeService.GetAllProductVariantAttributeCombinations(product.Id, command.Page - 1, command.PageSize);
 
 			var productUrlTitle = _localizationService.GetResource("Common.OpenInShop");
-			var productUrl = Url.RouteUrl("Product", new { SeName = product.GetSeName() });
-			productUrl = "{0}{1}attributes=".FormatWith(productUrl, productUrl.Contains("?") ? "&" : "?");
+			var productSeName = product.GetSeName();
 
-			var productVariantAttributesModel = productVariantAttributeCombinations.Select(x =>
+			var productVariantAttributesModel = allCombinations.Select(x =>
 			{
 				var pvacModel = x.ToModel();
 				PrepareProductAttributeCombinationModel(pvacModel, x, product, true);
 
-				pvacModel.ProductUrl = productUrl + _productAttributeParser.SerializeQueryData(product.Id, x.AttributesXml);
+				pvacModel.ProductUrl = _productAttributeParser.GetProductUrlWithAttributes(x.AttributesXml, product.Id, productSeName);
 				pvacModel.ProductUrlTitle = productUrlTitle;
 
 				try
 				{
 					var firstAttribute = _productAttributeParser.DeserializeProductVariantAttributes(x.AttributesXml).FirstOrDefault();
-
+					
 					var attribute = x.Product.ProductVariantAttributes.FirstOrDefault(y => y.Id == firstAttribute.Key);
 					var attributeValue = attribute.ProductVariantAttributeValues.FirstOrDefault(y => y.Id == int.Parse(firstAttribute.Value.First()));
 
@@ -4200,7 +4132,13 @@ namespace SmartStore.Admin.Controllers
 				//	pvacModel.AttributesXml = "<b>{0}</b>".FormatWith(pvacModel.AttributesXml);
 
 				//warnings
-				var warnings = _shoppingCartService.GetShoppingCartItemAttributeWarnings(_workContext.CurrentCustomer, ShoppingCartType.ShoppingCart, x.Product, x.AttributesXml);
+				var warnings = _shoppingCartService.GetShoppingCartItemAttributeWarnings(
+					_workContext.CurrentCustomer, 
+					ShoppingCartType.ShoppingCart, 
+					x.Product, 
+					x.AttributesXml,
+					combination: x);
+				
 				pvacModel.Warnings.AddRange(warnings);
 
 				return pvacModel;
@@ -4210,7 +4148,7 @@ namespace SmartStore.Admin.Controllers
 			var model = new GridModel<ProductVariantAttributeCombinationModel>
 			{
 				Data = productVariantAttributesModel,
-				Total = productVariantAttributesModel.Count
+				Total = allCombinations.TotalCount,
 			};
 
 			return new JsonResult
@@ -4273,12 +4211,20 @@ namespace SmartStore.Admin.Controllers
 			var warnings = new List<string>();
 			var variantAttributes = _productAttributeService.GetProductVariantAttributesByProductId(product.Id);
 
-			string attributeXml = form.CreateSelectedAttributesXml(product.Id, variantAttributes, _productAttributeParser, _localizationService,
-				_downloadService, _catalogSettings, this.Request, warnings, false);
+			string attributeXml = form.CreateSelectedAttributesXml(
+				product.Id, 
+				variantAttributes, 
+				_productAttributeParser, 
+				_localizationService,
+				_downloadService, 
+				_catalogSettings, 
+				this.Request, 
+				warnings, 
+				false);
 
 			warnings.AddRange(_shoppingCartService.GetShoppingCartItemAttributeWarnings(_workContext.CurrentCustomer, ShoppingCartType.ShoppingCart, product, attributeXml));
 
-			if (null != _productAttributeParser.FindProductVariantAttributeCombination(product, attributeXml))
+			if (_productAttributeParser.FindProductVariantAttributeCombination(product.Id, attributeXml) != null)
 			{
 				warnings.Add(_localizationService.GetResource("Admin.Catalog.Products.ProductVariantAttributes.AttributeCombinations.CombiExists"));
 			}
@@ -4388,10 +4334,7 @@ namespace SmartStore.Admin.Controllers
 			if (product == null)
 				throw new ArgumentException("No product found with the specified id");
 
-			foreach (var combination in _productAttributeService.GetAllProductVariantAttributeCombinations(product.Id))
-			{
-				_productAttributeService.DeleteProductVariantAttributeCombination(combination);
-			}
+			_pvacRepository.DeleteAll(x => x.ProductId == product.Id);
 
 			_productService.UpdateLowestAttributeCombinationPriceProperty(product);
 
@@ -4409,7 +4352,7 @@ namespace SmartStore.Admin.Controllers
 			string attributeXml = form.CreateSelectedAttributesXml(productId, attributes, _productAttributeParser,
 				_localizationService, _downloadService, _catalogSettings, this.Request, warnings, false);
 
-			bool exists = (null != _productAttributeParser.FindProductVariantAttributeCombination(productId, attributeXml));
+			bool exists = (_productAttributeParser.FindProductVariantAttributeCombination(productId, attributeXml) != null);
 
 			if (!exists)
 			{

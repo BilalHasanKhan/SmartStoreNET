@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Web;
 using System.Web.Mvc;
 using SmartStore.Core;
+using SmartStore.Core.Domain.Catalog;
 using SmartStore.Core.Domain.Common;
 using SmartStore.Core.Domain.Customers;
 using SmartStore.Core.Domain.Forums;
@@ -73,6 +75,7 @@ namespace SmartStore.Web.Controllers
         private readonly IDownloadService _downloadService;
         private readonly IWebHelper _webHelper;
         private readonly ICustomerActivityService _customerActivityService;
+		private readonly IProductAttributeParser _productAttributeParser;
 
         private readonly MediaSettings _mediaSettings;
         private readonly IWorkflowMessageService _workflowMessageService;
@@ -105,7 +108,9 @@ namespace SmartStore.Web.Controllers
             IOpenAuthenticationService openAuthenticationService, 
             IBackInStockSubscriptionService backInStockSubscriptionService, 
             IDownloadService downloadService, IWebHelper webHelper,
-            ICustomerActivityService customerActivityService, MediaSettings mediaSettings,
+            ICustomerActivityService customerActivityService, 
+			IProductAttributeParser productAttributeParser,
+			MediaSettings mediaSettings,
             IWorkflowMessageService workflowMessageService, LocalizationSettings localizationSettings,
             CaptchaSettings captchaSettings, ExternalAuthenticationSettings externalAuthenticationSettings,
 			PluginMediator pluginMediator)
@@ -143,6 +148,7 @@ namespace SmartStore.Web.Controllers
             this._downloadService = downloadService;
             this._webHelper = webHelper;
             this._customerActivityService = customerActivityService;
+			this._productAttributeParser = productAttributeParser;
 
             this._mediaSettings = mediaSettings;
             this._workflowMessageService = workflowMessageService;
@@ -1344,8 +1350,9 @@ namespace SmartStore.Web.Controllers
                 if (orderItem != null)
                 {
                     var product = orderItem.Product;
+					var attributeQueryData = new List<List<int>>();
 
-                    var itemModel = new CustomerReturnRequestsModel.ReturnRequestModel()
+                    var itemModel = new CustomerReturnRequestsModel.ReturnRequestModel
                     {
                         Id = returnRequest.Id,
                         ReturnRequestStatus = returnRequest.ReturnRequestStatus.GetLocalizedEnum(_localizationService, _workContext),
@@ -1356,8 +1363,22 @@ namespace SmartStore.Web.Controllers
                         ReturnAction = returnRequest.RequestedAction,
                         ReturnReason = returnRequest.ReasonForReturn,
                         Comments = returnRequest.CustomerComments,
-                        CreatedOn = _dateTimeHelper.ConvertToUserTime(returnRequest.CreatedOnUtc, DateTimeKind.Utc),
+                        CreatedOn = _dateTimeHelper.ConvertToUserTime(returnRequest.CreatedOnUtc, DateTimeKind.Utc)
                     };
+
+					if (orderItem.Product.ProductType != ProductType.BundledProduct)
+					{
+						_productAttributeParser.DeserializeQueryData(attributeQueryData, orderItem.AttributesXml, orderItem.ProductId);
+					}
+					else if (orderItem.Product.BundlePerItemPricing && orderItem.BundleData.HasValue())
+					{
+						var bundleData = orderItem.GetBundleData();
+
+						bundleData.ForEach(x => _productAttributeParser.DeserializeQueryData(attributeQueryData, x.AttributesXml, x.ProductId, x.BundleItemId));
+					}
+
+					itemModel.ProductUrl = _productAttributeParser.GetProductUrlWithAttributes(attributeQueryData, itemModel.ProductSeName);
+
                     model.Items.Add(itemModel);
                 }
             }
@@ -1380,8 +1401,9 @@ namespace SmartStore.Web.Controllers
             var model = new CustomerDownloadableProductsModel();
             model.NavigationModel = GetCustomerNavigationModel(customer);
             model.NavigationModel.SelectedTab = CustomerNavigationEnum.DownloadableProducts;
-            var items = _orderService.GetAllOrderItems(null, customer.Id, null, null,
-                null, null, null, true);
+
+            var items = _orderService.GetAllOrderItems(null, customer.Id, null, null, null, null, null, true);
+
             foreach (var item in items)
             {
                 var itemModel = new CustomerDownloadableProductsModel.DownloadableProductsModel
@@ -1394,6 +1416,9 @@ namespace SmartStore.Web.Controllers
                     ProductAttributes = item.AttributeDescription,
 					ProductId = item.ProductId
                 };
+
+				itemModel.ProductUrl = _productAttributeParser.GetProductUrlWithAttributes(item.AttributesXml, item.ProductId, itemModel.ProductSeName);
+
                 model.Items.Add(itemModel);
 
                 if (_downloadService.IsDownloadAllowed(item))

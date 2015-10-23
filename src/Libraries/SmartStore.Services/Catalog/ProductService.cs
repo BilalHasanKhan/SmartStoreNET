@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.ServiceModel.Syndication;
@@ -12,6 +13,7 @@ using SmartStore.Core.Data;
 using SmartStore.Core.Domain.Catalog;
 using SmartStore.Core.Domain.Common;
 using SmartStore.Core.Domain.Customers;
+using SmartStore.Core.Domain.Discounts;
 using SmartStore.Core.Domain.Localization;
 using SmartStore.Core.Domain.Media;
 using SmartStore.Core.Domain.Orders;
@@ -249,6 +251,17 @@ namespace SmartStore.Services.Catalog
 			product.QuantityUnitId = null;
 
             UpdateProduct(product);
+
+			if (product.ProductType == ProductType.GroupedProduct)
+			{
+				var associatedProducts = _productRepository.Table
+					.Where(x => x.ParentGroupedProductId == product.Id)
+					.ToList();
+
+				associatedProducts.ForEach(x => x.ParentGroupedProductId = 0);
+
+				_dbContext.SaveChanges();
+			}
         }
 
         /// <summary>
@@ -587,6 +600,37 @@ namespace SmartStore.Services.Catalog
 				pHomePageProducts.Value = (ctx.HomePageProducts.HasValue ? (object)ctx.HomePageProducts.Value : DBNull.Value);
 				pHomePageProducts.DbType = DbType.Boolean;
 
+				var pIdMin = _dataProvider.GetParameter();
+				pIdMin.ParameterName = "IdMin";
+				pIdMin.Value = ctx.IdMin;
+				pIdMin.DbType = DbType.Int32;
+
+				var pIdMax = _dataProvider.GetParameter();
+				pIdMax.ParameterName = "IdMax";
+				pIdMax.Value = ctx.IdMin;
+				pIdMax.DbType = DbType.Int32;
+
+				var pAvailabilityMin = _dataProvider.GetParameter();
+				pAvailabilityMin.ParameterName = "AvailabilityMin";
+				pAvailabilityMin.Value = ctx.AvailabilityMinimum.HasValue ? (object)ctx.AvailabilityMinimum.Value : DBNull.Value;
+				pAvailabilityMin.DbType = DbType.Int32;
+
+				var pAvailabilityMax = _dataProvider.GetParameter();
+				pAvailabilityMax.ParameterName = "AvailabilityMax";
+				pAvailabilityMax.Value = ctx.AvailabilityMaximum.HasValue ? (object)ctx.AvailabilityMaximum.Value : DBNull.Value;
+				pAvailabilityMax.DbType = DbType.Int32;
+
+				var pCreatedFromUtc = _dataProvider.GetParameter();
+				pCreatedFromUtc.ParameterName = "CreatedFromUtc";
+				pCreatedFromUtc.Value = ctx.CreatedFromUtc.HasValue ? (object)ctx.CreatedFromUtc.Value.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) : DBNull.Value;
+				pCreatedFromUtc.DbType = DbType.String;
+
+				var pCreatedToUtc = _dataProvider.GetParameter();
+				pCreatedToUtc.ParameterName = "CreatedToUtc";
+				pCreatedToUtc.Value = ctx.CreatedToUtc.HasValue ? (object)ctx.CreatedToUtc.Value.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) : DBNull.Value;
+				pCreatedToUtc.DbType = DbType.String;
+
+
                 var pFilterableSpecificationAttributeOptionIds = _dataProvider.GetParameter();
                 pFilterableSpecificationAttributeOptionIds.ParameterName = "FilterableSpecificationAttributeOptionIds";
                 pFilterableSpecificationAttributeOptionIds.Direction = ParameterDirection.Output;
@@ -629,6 +673,12 @@ namespace SmartStore.Services.Catalog
 					pWithoutManufacturers,
 					pIsPublished,
 					pHomePageProducts,
+					pIdMin,
+					pIdMax,
+					pAvailabilityMin,
+					pAvailabilityMax,
+					pCreatedFromUtc,
+					pCreatedToUtc,
                     pFilterableSpecificationAttributeOptionIds,
                     pTotalRecords);
 
@@ -802,6 +852,34 @@ namespace SmartStore.Services.Catalog
 			if (ctx.ProductIds != null && ctx.ProductIds.Count > 0)
 			{
 				query = query.Where(x => ctx.ProductIds.Contains(x.Id));
+			}
+			else
+			{
+				if (ctx.IdMin != 0)
+					query = query.Where(x => x.Id >= ctx.IdMin);
+
+				if (ctx.IdMax != 0)
+					query = query.Where(x => x.Id <= ctx.IdMax);
+			}
+
+			if (ctx.AvailabilityMinimum.HasValue)
+			{
+				query = query.Where(x => x.StockQuantity >= ctx.AvailabilityMinimum.Value);
+			}
+
+			if (ctx.AvailabilityMaximum.HasValue)
+			{
+				query = query.Where(x => x.StockQuantity <= ctx.AvailabilityMaximum.Value);
+			}
+
+			if (ctx.CreatedFromUtc.HasValue)
+			{
+				query = query.Where(x => x.CreatedOnUtc >= ctx.CreatedFromUtc.Value);
+			}
+
+			if (ctx.CreatedToUtc.HasValue)
+			{
+				query = query.Where(x => x.CreatedOnUtc <= ctx.CreatedToUtc.Value);
 			}
 
 			//The function 'CurrentUtcDateTime' is not supported by SQL Server Compact. 
@@ -1015,24 +1093,25 @@ namespace SmartStore.Services.Catalog
         /// <returns>Result</returns>
         public virtual IList<Product> GetLowStockProducts()
         {
-			//Track inventory for product
+			// Track inventory for product
 			var query1 = from p in _productRepository.Table
 						 orderby p.MinStockQuantity
 						 where !p.Deleted &&
-						 p.ManageInventoryMethodId == (int)ManageInventoryMethod.ManageStock &&
-						 p.MinStockQuantity >= p.StockQuantity
+							p.ManageInventoryMethodId == (int)ManageInventoryMethod.ManageStock &&
+							p.MinStockQuantity >= p.StockQuantity
 						 select p;
 			var products1 = query1.ToList();
 
-			//Track inventory for product by product attributes
+			// Track inventory for product by product attributes
 			var query2 = from p in _productRepository.Table
 						 from pvac in p.ProductVariantAttributeCombinations
 						 where !p.Deleted &&
-						 p.ManageInventoryMethodId == (int)ManageInventoryMethod.ManageStockByAttributes &&
-						 pvac.StockQuantity <= 0
+							p.ManageInventoryMethodId == (int)ManageInventoryMethod.ManageStockByAttributes &&
+							pvac.StockQuantity <= 0
 						 select p;
-			//only distinct products (group by ID)
-			//if we use standard Distinct() method, then all fields will be compared (low performance)
+
+			// only distinct products (group by ID)
+			// if we use standard Distinct() method, then all fields will be compared (low performance)
 			query2 = from p in query2
 					 group p by p.Id into pGroup
 					 orderby pGroup.Key
@@ -1210,7 +1289,7 @@ namespace SmartStore.Services.Catalog
                     break;
                 case ManageInventoryMethod.ManageStockByAttributes:
                     {
-                        var combination = _productAttributeParser.FindProductVariantAttributeCombination(product, attributesXml);
+                        var combination = _productAttributeParser.FindProductVariantAttributeCombination(product.Id, attributesXml);
                         if (combination != null)
                         {
 							result.StockQuantityOld = combination.StockQuantity;
@@ -1358,6 +1437,71 @@ namespace SmartStore.Services.Catalog
 			feed.Items = items;
 
 			return feed;
+		}
+
+		public virtual Multimap<int, ProductTag> GetProductTagsByProductIds(int[] productIds)
+		{
+			Guard.ArgumentNotNull(() => productIds);
+
+			var query = _productRepository.TableUntracked
+				.Expand(x => x.ProductTags)
+				.Where(x => productIds.Contains(x.Id))
+				.Select(x => new
+				{
+					ProductId = x.Id,
+					Tags = x.ProductTags
+				});
+
+			var map = new Multimap<int, ProductTag>();
+
+			foreach (var item in query.ToList())
+			{
+				foreach (var tag in item.Tags)
+					map.Add(item.ProductId, tag);
+			}
+
+			return map;
+		}
+
+		public virtual Multimap<int, Discount> GetAppliedDiscountsByProductIds(int[] productIds)
+		{
+			Guard.ArgumentNotNull(() => productIds);
+
+			var query = _productRepository.TableUntracked
+				.Expand(x => x.AppliedDiscounts.Select(y => y.DiscountRequirements))
+				.Where(x => productIds.Contains(x.Id))
+				.Select(x => new
+				{
+					ProductId = x.Id,
+					Discounts = x.AppliedDiscounts
+				});
+
+			var map = new Multimap<int, Discount>();
+
+			foreach (var item in query.ToList())
+			{
+				foreach (var discount in item.Discounts)
+					map.Add(item.ProductId, discount);
+			}
+
+			return map;
+		}
+
+		public virtual Multimap<int, ProductSpecificationAttribute> GetProductSpecificationAttributesByProductIds(int[] productIds)
+		{
+			Guard.ArgumentNotNull(() => productIds);
+
+			var query = _productSpecificationAttributeRepository.TableUntracked
+				.Expand(x => x.SpecificationAttributeOption)
+				.Expand(x => x.SpecificationAttributeOption.SpecificationAttribute)
+				.Where(x => productIds.Contains(x.ProductId));
+
+			var map = query
+				.OrderBy(x => x.DisplayOrder)
+				.ToList()
+				.ToMultimap(x => x.ProductId, x => x);
+
+			return map;
 		}
 
         #endregion
@@ -1641,7 +1785,7 @@ namespace SmartStore.Services.Catalog
             return tierPrice;
         }
 
-		public virtual Multimap<int, TierPrice> GetTierPrices(int[] productIds, Customer customer = null, int storeId = 0)
+		public virtual Multimap<int, TierPrice> GetTierPricesByProductIds(int[] productIds, Customer customer = null, int storeId = 0)
 		{
 			Guard.ArgumentNotNull(() => productIds);
 
@@ -1661,7 +1805,6 @@ namespace SmartStore.Services.Catalog
 				list = list.FilterForCustomer(customer).ToList();
 
 			var map = list
-				.RemoveDuplicatedQuantities()
 				.ToMultimap(x => x.ProductId, x => x);
 
 			return map;
@@ -1766,6 +1909,22 @@ namespace SmartStore.Services.Catalog
             var productPictures = query.ToList();
             return productPictures;
         }
+
+		public virtual Multimap<int, ProductPicture> GetProductPicturesByProductIds(int[] productIds)
+		{
+			var query = 
+				from pp in _productPictureRepository.TableUntracked
+				where productIds.Contains(pp.ProductId)
+				select pp;
+
+			var map = query
+				.OrderBy(x => x.ProductId)
+				.ThenBy(x => x.DisplayOrder)
+				.ToList()
+				.ToMultimap(x => x.ProductId, x => x);
+
+			return map;
+		}
 
         /// <summary>
         /// Gets a product picture
@@ -1904,6 +2063,24 @@ namespace SmartStore.Services.Catalog
 			query.ToList().Each(x => bundleItemData.Add(new ProductBundleItemData(x)));
 
 			return bundleItemData;
+		}
+
+		public virtual Multimap<int, ProductBundleItem> GetBundleItemsByProductIds(int[] productIds, bool showHidden = false)
+		{
+			Guard.ArgumentNotNull(() => productIds);
+
+			var query =
+				from pbi in _productBundleItemRepository.TableUntracked
+				join p in _productRepository.TableUntracked on pbi.ProductId equals p.Id
+				where productIds.Contains(pbi.BundleProductId) && !p.Deleted && (showHidden || (pbi.Published && p.Published))
+				orderby pbi.DisplayOrder
+				select pbi;
+
+			var map = query
+				.ToList()
+				.ToMultimap(x => x.BundleProductId, x => x);
+
+			return map;
 		}
 
 		#endregion

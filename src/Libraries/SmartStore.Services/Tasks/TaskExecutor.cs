@@ -1,18 +1,15 @@
-﻿using SmartStore.Core.Data;
+﻿using System;
+using System.Threading;
+using Autofac;
+using SmartStore.Core.Async;
+using SmartStore.Core.Data;
 using SmartStore.Core.Domain.Tasks;
 using SmartStore.Core.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using SmartStore.Core.Async;
-using System.Threading;
 using SmartStore.Core.Plugins;
-using Autofac;
 using SmartStore.Services.Customers;
 using SmartStore.Core;
 using SmartStore.Core.Domain.Customers;
+using System.Diagnostics;
 
 namespace SmartStore.Services.Tasks
 {
@@ -65,6 +62,12 @@ namespace SmartStore.Services.Tasks
 			try
 			{
 				taskType = Type.GetType(task.Type);
+
+				Debug.WriteLineIf(taskType == null, "Invalid task type: " + task.Type.NaIfEmpty());
+
+				if (taskType == null)
+					return;
+
 				if (!PluginManager.IsActivePluginAssembly(taskType.Assembly))
 					return;
 			}
@@ -127,27 +130,27 @@ namespace SmartStore.Services.Tasks
 				task.ProgressMessage = null;
 
 				var now = DateTime.UtcNow;
-                task.LastError = lastError;
-                task.LastEndUtc = now;
+				task.LastError = lastError;
+				task.LastEndUtc = now;
 
-                if (faulted)
-                {
-                    if ((!canceled && task.StopOnError) || instance == null)
-                    {
-                        task.Enabled = false;
-                    }
-                }
-                else
-                {
-                    task.LastSuccessUtc = now;
-                }
+				if (faulted)
+				{
+					if ((!canceled && task.StopOnError) || instance == null)
+					{
+						task.Enabled = false;
+					}
+				}
+				else
+				{
+					task.LastSuccessUtc = now;
+				}
 
-                if (task.Enabled)
-                {
+				if (task.Enabled)
+				{
 					task.NextRunUtc = _scheduledTaskService.GetNextSchedule(task);
-                }
+				}
 
-                _scheduledTaskService.UpdateTask(task);
+				_scheduledTaskService.UpdateTask(task);
             }
         }
 

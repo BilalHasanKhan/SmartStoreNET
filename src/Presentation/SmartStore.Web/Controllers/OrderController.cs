@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Web.Mvc;
 using System.Web.Routing;
-using System.Web.SessionState;
 using SmartStore.Core.Data;
 using SmartStore.Core.Domain.Catalog;
 using SmartStore.Core.Domain.Common;
@@ -11,7 +10,6 @@ using SmartStore.Core.Domain.Orders;
 using SmartStore.Core.Domain.Shipping;
 using SmartStore.Core.Domain.Tax;
 using SmartStore.Core.Html;
-using SmartStore.Core.Localization;
 using SmartStore.Services;
 using SmartStore.Services.Catalog;
 using SmartStore.Services.Directory;
@@ -49,6 +47,7 @@ namespace SmartStore.Web.Controllers
         private readonly ICountryService _countryService;
 		private readonly IProductService _productService;
 		private readonly IProductAttributeFormatter _productAttributeFormatter;
+		private readonly IProductAttributeParser _productAttributeParser;
 		private readonly IStoreService _storeService;
         private readonly ICheckoutAttributeFormatter _checkoutAttributeFormatter;
 		private readonly PluginMediator _pluginMediator;
@@ -74,6 +73,7 @@ namespace SmartStore.Web.Controllers
 			IStoreService storeService,
 			IProductService productService,
 			IProductAttributeFormatter productAttributeFormatter,
+			IProductAttributeParser productAttributeParser,
 			Lazy<IPictureService> pictureService,
 			PluginMediator pluginMediator,
 			ICommonServices services,
@@ -91,6 +91,7 @@ namespace SmartStore.Web.Controllers
             this._countryService = countryService;
 			this._productService = productService;
 			this._productAttributeFormatter = productAttributeFormatter;
+			this._productAttributeParser = productAttributeParser;
 			this._storeService = storeService;
             this._checkoutAttributeFormatter = checkoutAttributeFormatter;
 			this._pluginMediator = pluginMediator;
@@ -342,17 +343,20 @@ namespace SmartStore.Web.Controllers
 			var catalogSettings = _services.Settings.LoadSetting<CatalogSettings>(store.Id);
 			var shippingSettings = _services.Settings.LoadSetting<ShippingSettings>(store.Id);
 
-            var model = new ShipmentDetailsModel();
-            
-            model.Id = shipment.Id;
+			var model = new ShipmentDetailsModel
+			{
+				Id = shipment.Id,
+				TrackingNumber = shipment.TrackingNumber
+			};
+
             if (shipment.ShippedDateUtc.HasValue)
                 model.ShippedDate = _dateTimeHelper.ConvertToUserTime(shipment.ShippedDateUtc.Value, DateTimeKind.Utc);
+
             if (shipment.DeliveryDateUtc.HasValue)
                 model.DeliveryDate = _dateTimeHelper.ConvertToUserTime(shipment.DeliveryDateUtc.Value, DateTimeKind.Utc);
             
-            //tracking number and shipment information
-            model.TrackingNumber = shipment.TrackingNumber;
             var srcm = _shippingService.LoadShippingRateComputationMethodBySystemName(order.ShippingRateComputationMethodSystemName);
+
             if (srcm != null && srcm.IsShippingRateComputationMethodActive(shippingSettings))
             {
                 var shipmentTracker = srcm.Value.ShipmentTracker;
@@ -362,25 +366,30 @@ namespace SmartStore.Web.Controllers
 					if (shippingSettings.DisplayShipmentEventsToCustomers)
                     {
                         var shipmentEvents = shipmentTracker.GetShipmentEvents(shipment.TrackingNumber);
-                        if (shipmentEvents != null)
-                            foreach (var shipmentEvent in shipmentEvents)
-                            {
-                                var shipmentStatusEventModel = new ShipmentDetailsModel.ShipmentStatusEventModel();
-                                var shipmentEventCountry = _countryService.GetCountryByTwoLetterIsoCode(shipmentEvent.CountryCode);
-                                shipmentStatusEventModel.Country = shipmentEventCountry != null
-                                                                       ? shipmentEventCountry.GetLocalized(x => x.Name)
-                                                                       : shipmentEvent.CountryCode;
-                                shipmentStatusEventModel.Date = shipmentEvent.Date;
-                                shipmentStatusEventModel.EventName = shipmentEvent.EventName;
-                                shipmentStatusEventModel.Location = shipmentEvent.Location;
-                                model.ShipmentStatusEvents.Add(shipmentStatusEventModel);
-                            }
+						if (shipmentEvents != null)
+						{
+							foreach (var shipmentEvent in shipmentEvents)
+							{
+								var shipmentEventCountry = _countryService.GetCountryByTwoLetterIsoCode(shipmentEvent.CountryCode);
+
+								var shipmentStatusEventModel = new ShipmentDetailsModel.ShipmentStatusEventModel
+								{
+									Country = (shipmentEventCountry != null ? shipmentEventCountry.GetLocalized(x => x.Name) : shipmentEvent.CountryCode),
+									Date = shipmentEvent.Date,
+									EventName = shipmentEvent.EventName,
+									Location = shipmentEvent.Location
+								};
+
+								model.ShipmentStatusEvents.Add(shipmentStatusEventModel);
+							}
+						}
                     }
                 }
             }
             
             //products in this shipment
 			model.ShowSku = catalogSettings.ShowProductSku;
+
             foreach (var shipmentItem in shipment.ShipmentItems)
             {
                 var orderItem = _orderService.GetOrderItemById(shipmentItem.OrderItemId);
@@ -388,7 +397,10 @@ namespace SmartStore.Web.Controllers
                     continue;
 
                 orderItem.Product.MergeWithCombination(orderItem.AttributesXml);
-                var shipmentItemModel = new ShipmentDetailsModel.ShipmentItemModel()
+
+				var attributeQueryData = new List<List<int>>();
+
+                var shipmentItemModel = new ShipmentDetailsModel.ShipmentItemModel
                 {
                     Id = shipmentItem.Id,
                     Sku = orderItem.Product.Sku,
@@ -397,12 +409,25 @@ namespace SmartStore.Web.Controllers
                     ProductSeName = orderItem.Product.GetSeName(),
                     AttributeInfo = orderItem.AttributeDescription,
                     QuantityOrdered = orderItem.Quantity,
-                    QuantityShipped = shipmentItem.Quantity,
+                    QuantityShipped = shipmentItem.Quantity
                 };
+
+				if (orderItem.Product.ProductType != ProductType.BundledProduct)
+				{
+					_productAttributeParser.DeserializeQueryData(attributeQueryData, orderItem.AttributesXml, orderItem.ProductId);
+				}
+				else if (orderItem.Product.BundlePerItemPricing && orderItem.BundleData.HasValue())
+				{
+					var bundleData = orderItem.GetBundleData();
+
+					bundleData.ForEach(x => _productAttributeParser.DeserializeQueryData(attributeQueryData, x.AttributesXml, x.ProductId, x.BundleItemId));
+				}
+
+				shipmentItemModel.ProductUrl = _productAttributeParser.GetProductUrlWithAttributes(attributeQueryData, shipmentItemModel.ProductSeName);
+
                 model.Items.Add(shipmentItemModel);
             }
 
-            //order details model
             model.Order = PrepareOrderDetailsModel(order);
             
             return model;
@@ -410,9 +435,11 @@ namespace SmartStore.Web.Controllers
 
 		private OrderDetailsModel.OrderItemModel PrepareOrderItemModel(Order order, OrderItem orderItem)
 		{
+			var attributeQueryData = new List<List<int>>();
+
 			orderItem.Product.MergeWithCombination(orderItem.AttributesXml);
 
-			var model = new OrderDetailsModel.OrderItemModel()
+			var model = new OrderDetailsModel.OrderItemModel
 			{
 				Id = orderItem.Id,
 				Sku = orderItem.Product.Sku,
@@ -424,8 +451,13 @@ namespace SmartStore.Web.Controllers
 				AttributeInfo = orderItem.AttributeDescription
 			};
 
+			if (orderItem.Product.ProductType != ProductType.BundledProduct)
+			{
+				_productAttributeParser.DeserializeQueryData(attributeQueryData, orderItem.AttributesXml, orderItem.ProductId);
+			}
+
             var quantityUnit = _quantityUnitService.GetQuantityUnitById(orderItem.Product.QuantityUnitId);
-            model.QuantityUnit = quantityUnit == null ? "" : quantityUnit.GetLocalized(x => x.Name);
+            model.QuantityUnit = (quantityUnit == null ? "" : quantityUnit.GetLocalized(x => x.Name));
             
 			if (orderItem.Product.ProductType == ProductType.BundledProduct && orderItem.BundleData.HasValue())
 			{
@@ -436,7 +468,7 @@ namespace SmartStore.Web.Controllers
 
 				foreach (var bundleItem in bundleData)
 				{
-					var bundleItemModel = new OrderDetailsModel.BundleItemModel()
+					var bundleItemModel = new OrderDetailsModel.BundleItemModel
 					{
 						Sku = bundleItem.Sku,
 						ProductName = bundleItem.ProductName,
@@ -446,6 +478,13 @@ namespace SmartStore.Web.Controllers
 						DisplayOrder = bundleItem.DisplayOrder,
 						AttributeInfo = bundleItem.AttributesInfo
 					};
+
+					bundleItemModel.ProductUrl = _productAttributeParser.GetProductUrlWithAttributes(bundleItem.AttributesXml, bundleItem.ProductId, bundleItemModel.ProductSeName);
+
+					if (orderItem.Product.BundlePerItemPricing)
+					{
+						_productAttributeParser.DeserializeQueryData(attributeQueryData, bundleItem.AttributesXml, bundleItem.ProductId, bundleItem.BundleItemId);
+					}
 
 					if (model.BundlePerItemShoppingCart)
 					{
@@ -469,6 +508,7 @@ namespace SmartStore.Web.Controllers
 						model.SubTotal = _priceFormatter.FormatPrice(priceExclTaxInCustomerCurrency, true, order.CustomerCurrencyCode, _services.WorkContext.WorkingLanguage, false, false);
 					}
 					break;
+
 				case TaxDisplayType.IncludingTax:
 					{
 						var unitPriceInclTaxInCustomerCurrency = _currencyService.ConvertCurrency(orderItem.UnitPriceInclTax, order.CurrencyRate);
@@ -479,6 +519,9 @@ namespace SmartStore.Web.Controllers
 					}
 					break;
 			}
+
+			model.ProductUrl = _productAttributeParser.GetProductUrlWithAttributes(attributeQueryData, model.ProductSeName);
+
 			return model;
 		}
 

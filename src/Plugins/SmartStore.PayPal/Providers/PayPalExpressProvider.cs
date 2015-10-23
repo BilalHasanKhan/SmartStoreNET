@@ -14,6 +14,7 @@ using SmartStore.PayPal.Controllers;
 using SmartStore.PayPal.PayPalSvc;
 using SmartStore.PayPal.Services;
 using SmartStore.PayPal.Settings;
+using SmartStore.Services;
 using SmartStore.Services.Catalog;
 using SmartStore.Services.Common;
 using SmartStore.Services.Customers;
@@ -21,6 +22,7 @@ using SmartStore.Services.Directory;
 using SmartStore.Services.Orders;
 using SmartStore.Services.Payments;
 using SmartStore.Services.Shipping;
+using SmartStore.Web.Framework.Plugins;
 
 namespace SmartStore.PayPal
 {
@@ -38,7 +40,7 @@ namespace SmartStore.PayPal
         private readonly ICustomerService _customerService;
         private readonly ICountryService _countryService;
         private readonly HttpContextBase _httpContext;
-        
+
         public PayPalExpress(
             ICurrencyService currencyService,
             IPriceCalculationService priceCalculationService,
@@ -76,7 +78,7 @@ namespace SmartStore.PayPal
 			var result = new ProcessPaymentResult();
             var doPayment = DoExpressCheckoutPayment(processPaymentRequest);
 			var settings = Services.Settings.LoadSetting<PayPalExpressPaymentSettings>(processPaymentRequest.StoreId);
-
+            
             if (doPayment.Ack == AckCodeType.Success)
             {
                 if (PayPalHelper.GetPaymentAction(settings) == PaymentActionCodeType.Authorization)
@@ -117,11 +119,22 @@ namespace SmartStore.PayPal
         {
             var result = new DoCaptureResponseType();
             var settings = Services.Settings.LoadSetting<PayPalExpressPaymentSettings>(capturePaymentRequest.Order.StoreId);
+			var currencyCode = Services.WorkContext.WorkingCurrency.CurrencyCode ?? "EUR";
 
             // build the request
             var req = new DoCaptureReq
             {
-                DoCaptureRequest = new DoCaptureRequestType()
+                DoCaptureRequest = new DoCaptureRequestType
+                {
+                    Version = PayPalHelper.GetApiVersion(),
+                    AuthorizationID = capturePaymentRequest.Order.CaptureTransactionId,
+                    Amount = new BasicAmountType
+					{ 
+                        Value = Math.Round(capturePaymentRequest.Order.OrderTotal, 2).ToString("N", new CultureInfo("en-us")),
+                        currencyID = (CurrencyCodeType)Enum.Parse(typeof(CurrencyCodeType), currencyCode, true)
+                    },
+                    CompleteType = CompleteCodeType.NotComplete
+                }
             };
 
             //execute request
@@ -138,6 +151,7 @@ namespace SmartStore.PayPal
             {
                 capturePaymentResult.CaptureTransactionId = result.DoCaptureResponseDetails.PaymentInfo.TransactionID;
                 capturePaymentResult.CaptureTransactionResult = "Success";
+                capturePaymentResult.NewPaymentStatus = PaymentStatus.Paid;
             }
             else
             {

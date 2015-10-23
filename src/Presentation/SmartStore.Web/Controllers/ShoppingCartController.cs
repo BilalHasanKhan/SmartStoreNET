@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Web;
 using System.Web.Mvc;
@@ -223,7 +222,7 @@ namespace SmartStore.Web.Controllers
 			
 			product.MergeWithCombination(item.AttributesXml);
 
-			var model = new ShoppingCartModel.ShoppingCartItemModel()
+			var model = new ShoppingCartModel.ShoppingCartItemModel
 			{
 				Id = item.Id,
 				Sku = product.Sku,
@@ -235,9 +234,11 @@ namespace SmartStore.Web.Controllers
 				IsShipEnabled = product.IsShipEnabled,
 				ShortDesc = product.GetLocalized(x => x.ShortDescription),
 				ProductType = product.ProductType,
-                BasePrice = product.GetBasePriceInfo(_localizationService, _priceFormatter),
-                Weight = product.Weight
+				BasePrice = product.GetBasePriceInfo(_localizationService, _priceFormatter, _currencyService, _taxService, _priceCalculationService, _workContext.WorkingCurrency),
+				Weight = product.Weight
 			};
+
+			model.ProductUrl = GetProductUrlWithAttributes(sci, model.ProductSeName);
 
 			if (item.BundleItem != null)
 			{
@@ -368,7 +369,15 @@ namespace SmartStore.Web.Controllers
 					model.Discount = _priceFormatter.FormatPrice(shoppingCartItemDiscount);
 				}
 
-                model.BasePrice = product.GetBasePriceInfo(_localizationService, _priceFormatter, (product.Price - shoppingCartItemSubTotalWithDiscount) * (-1));
+                model.BasePrice = product.GetBasePriceInfo(
+                    _localizationService, 
+                    _priceFormatter,
+                    _currencyService,
+                    _taxService,
+                    _priceCalculationService,
+                    _workContext.WorkingCurrency,
+                    (product.Price - _priceCalculationService.GetUnitPrice(sci, true)) * (-1)
+                );
 			}
 
 			//picture
@@ -404,6 +413,7 @@ namespace SmartStore.Web.Controllers
 
 			return model;
 		}
+		
 		private WishlistModel.ShoppingCartItemModel PrepareWishlistCartItemModel(OrganizedShoppingCartItem sci)
 		{
 			var item = sci.Item;
@@ -411,7 +421,7 @@ namespace SmartStore.Web.Controllers
 
 			product.MergeWithCombination(item.AttributesXml);
 
-			var model = new WishlistModel.ShoppingCartItemModel()
+			var model = new WishlistModel.ShoppingCartItemModel
 			{
 				Id = item.Id,
 				Sku = product.Sku,
@@ -423,6 +433,8 @@ namespace SmartStore.Web.Controllers
 				ProductType = product.ProductType,
 				VisibleIndividually = product.VisibleIndividually
 			};
+
+			model.ProductUrl = GetProductUrlWithAttributes(sci, model.ProductSeName);
 
 			if (item.BundleItem != null)
 			{
@@ -461,7 +473,7 @@ namespace SmartStore.Web.Controllers
 			var allowedQuantities = product.ParseAllowedQuatities();
 			foreach (var qty in allowedQuantities)
 			{
-				model.AllowedQuantities.Add(new SelectListItem()
+				model.AllowedQuantities.Add(new SelectListItem
 				{
 					Text = qty.ToString(),
 					Value = qty.ToString(),
@@ -902,7 +914,7 @@ namespace SmartStore.Web.Controllers
         [NonAction]
         protected MiniShoppingCartModel PrepareMiniShoppingCartModel()
         {
-            var model = new MiniShoppingCartModel()
+            var model = new MiniShoppingCartModel
             {
                 ShowProductImages = _shoppingCartSettings.ShowProductImagesInMiniShoppingCart,
                 ThumbSize = _mediaSettings.MiniCartThumbPictureSize,
@@ -952,16 +964,19 @@ namespace SmartStore.Web.Controllers
                     .Take(_shoppingCartSettings.MiniShoppingCartProductNumber)
                     .ToList())
                 {
-                    var cartItemModel = new MiniShoppingCartModel.ShoppingCartItemModel()
+					var item = sci.Item;
+					var product = sci.Item.Product;
+
+                    var cartItemModel = new MiniShoppingCartModel.ShoppingCartItemModel
                     {
-                        Id = sci.Item.Id,
-                        ProductId = sci.Item.Product.Id,
-						ProductName = sci.Item.Product.GetLocalized(x => x.Name),
-                        ProductSeName = sci.Item.Product.GetSeName(),
-                        Quantity = sci.Item.Quantity,
+                        Id = item.Id,
+                        ProductId = product.Id,
+						ProductName = product.GetLocalized(x => x.Name),
+                        ProductSeName = product.GetSeName(),
+                        Quantity = item.Quantity,
                         AttributeInfo = _productAttributeFormatter.FormatAttributes(
-                            sci.Item.Product, 
-                            sci.Item.AttributesXml, 
+                            product, 
+                            item.AttributesXml, 
                             null,
                             serapator: ", ", 
                             renderPrices: false, 
@@ -969,35 +984,40 @@ namespace SmartStore.Web.Controllers
                             allowHyperlinks: false)
                     };
 
-                    if (sci.Item.Product.ProductType == ProductType.BundledProduct)
-                    {                        
-                        var bundleItems = _productService.GetBundleItems(sci.Item.Product.Id);
-                        foreach (var bundleItem in bundleItems)
-                        {
-                            var bundleItemModel = new MiniShoppingCartModel.ShoppingCartItemBundleItem();
-                            bundleItemModel.ProductName = bundleItem.Item.Product.GetLocalized(x => x.Name);
-                            var bundlePic = _pictureService.GetPicturesByProductId(bundleItem.Item.ProductId).FirstOrDefault();
-                            if(bundlePic != null)
-                                bundleItemModel.PictureUrl = _pictureService.GetPictureUrl(bundlePic.Id, 32);
+					cartItemModel.ProductUrl = GetProductUrlWithAttributes(sci, cartItemModel.ProductSeName);
 
-                            bundleItemModel.ProductSeName = bundleItem.Item.Product.GetSeName();
+					if (sci.ChildItems != null && _shoppingCartSettings.ShowProductBundleImagesOnShoppingCart)
+					{
+						foreach (var childItem in sci.ChildItems.Where(x => x.Item.Id != item.Id && x.Item.BundleItem != null && !x.Item.BundleItem.HideThumbnail))
+						{
+							var bundleItemModel = new MiniShoppingCartModel.ShoppingCartItemBundleItem
+							{
+								ProductName = childItem.Item.Product.GetLocalized(x => x.Name),
+								ProductSeName = childItem.Item.Product.GetSeName(),
+							};
 
-                            if (!bundleItem.Item.HideThumbnail) 
-                                cartItemModel.BundleItems.Add(bundleItemModel);
-                        }
-                    }
+							bundleItemModel.ProductUrl = _productAttributeParser.GetProductUrlWithAttributes(
+								childItem.Item.AttributesXml, childItem.Item.ProductId, bundleItemModel.ProductSeName);
+
+							var itemPicture = _pictureService.GetPicturesByProductId(childItem.Item.ProductId, 1).FirstOrDefault();
+							if (itemPicture != null)
+								bundleItemModel.PictureUrl = _pictureService.GetPictureUrl(itemPicture.Id, 32);
+
+							cartItemModel.BundleItems.Add(bundleItemModel);
+						}
+					}
 
                     //unit prices
-                    if (sci.Item.Product.CallForPrice)
+                    if (product.CallForPrice)
                     {
                         cartItemModel.UnitPrice = _localizationService.GetResource("Products.CallForPrice");
                     }
                     else
                     {
-						sci.Item.Product.MergeWithCombination(sci.Item.AttributesXml);
+						product.MergeWithCombination(item.AttributesXml);
 
                         decimal taxRate = decimal.Zero;
-                        decimal shoppingCartUnitPriceWithDiscountBase = _taxService.GetProductPrice(sci.Item.Product, _priceCalculationService.GetUnitPrice(sci, true), out taxRate);
+                        decimal shoppingCartUnitPriceWithDiscountBase = _taxService.GetProductPrice(product, _priceCalculationService.GetUnitPrice(sci, true), out taxRate);
                         decimal shoppingCartUnitPriceWithDiscount = _currencyService.ConvertFromPrimaryStoreCurrency(shoppingCartUnitPriceWithDiscountBase, _workContext.WorkingCurrency);
 
                         cartItemModel.UnitPrice = _priceFormatter.FormatPrice(shoppingCartUnitPriceWithDiscount);
@@ -1006,8 +1026,7 @@ namespace SmartStore.Web.Controllers
                     //picture
                     if (_shoppingCartSettings.ShowProductImagesInMiniShoppingCart)
                     {
-                        cartItemModel.Picture = PrepareCartItemPictureModel(sci.Item.Product,
-                            _mediaSettings.MiniCartThumbPictureSize, true, cartItemModel.ProductName, sci.Item.AttributesXml);
+                        cartItemModel.Picture = PrepareCartItemPictureModel(product, _mediaSettings.MiniCartThumbPictureSize, true, cartItemModel.ProductName, item.AttributesXml);
                     }
 
                     model.Items.Add(cartItemModel);
@@ -1131,6 +1150,27 @@ namespace SmartStore.Web.Controllers
             //save checkout attributes
 			_genericAttributeService.SaveAttribute(_workContext.CurrentCustomer, SystemCustomerAttributeNames.CheckoutAttributes, selectedAttributes);
         }
+
+		private string GetProductUrlWithAttributes(OrganizedShoppingCartItem cartItem, string productSeName)
+		{
+			var attributeQueryData = new List<List<int>>();
+			var product = cartItem.Item.Product;
+
+			if (product.ProductType != ProductType.BundledProduct)
+			{
+				_productAttributeParser.DeserializeQueryData(attributeQueryData, cartItem.Item.AttributesXml, product.Id);
+			}
+			else if (cartItem.ChildItems != null && product.BundlePerItemPricing)
+			{
+				foreach (var childItem in cartItem.ChildItems.Where(x => x.Item.Id != cartItem.Item.Id))
+				{
+					_productAttributeParser.DeserializeQueryData(attributeQueryData, childItem.Item.AttributesXml, childItem.Item.ProductId, childItem.BundleItemData.Item.Id);
+				}
+			}
+
+			var url = _productAttributeParser.GetProductUrlWithAttributes(attributeQueryData, productSeName);
+			return url;
+		}
 
         #endregion
 

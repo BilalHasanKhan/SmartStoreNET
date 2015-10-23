@@ -7,7 +7,6 @@ using SmartStore.Core;
 using SmartStore.Core.Caching;
 using SmartStore.Core.Data;
 using SmartStore.Core.Domain.Localization;
-using SmartStore.Core.Infrastructure;
 
 namespace SmartStore.Services.Localization
 {

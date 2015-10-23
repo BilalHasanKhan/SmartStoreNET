@@ -393,21 +393,28 @@ td.adminData > input[type="checkbox"] {
 	margin-top: -1px;
 }
 
-.admin-config-group .title,
-.admin-config-group .small-title {
-    font-family: @headingsFontFamily;
-    font-weight: @headingsFontWeight;
-    color: inherit; 
-	border-bottom: 1px solid #ddd;
-}
-.admin-config-group .title {
-    font-size: @fontSizeLarge;
-	margin: 12px 0;
-	padding: 8px 0;
-}
-.admin-config-group .small-title {
-	margin: 2px 0;
-	padding: 2px 0;
+.admin-config-group {
+	.title,
+	.small-title {
+		font-family: @headingsFontFamily;
+		font-weight: @headingsFontWeight;
+		color: inherit; 
+		border-bottom: 1px solid #ddd;
+	}
+	.title {
+		font-size: @fontSizeLarge;
+		margin: 12px 0;
+		padding: 8px 0;
+	}
+	.small-title {
+		margin: 2px 0;
+		padding: 2px 0;
+	}
+	.sub-title {
+		font-family: @baseFontFamily;
+		font-size: @baseFontSize;
+		font-weight: normal;
+	}
 }
 
 
@@ -416,6 +423,42 @@ td.adminData > input[type="checkbox"] {
 
 .select2-container:not(.autowidth) {
     min-width: 314px; /* ensures more clean look & feel */
+}
+
+
+/* select2 with large, templated items
+-------------------------------------------------------------- */
+.large-select2 {
+	.select2-choice {
+		height: 52px;
+		min-height: 52px;
+		padding-top: 4px;
+
+		> div > b {
+			padding-top: 14px;
+		}
+	}
+}
+
+.large-select2-item {
+	overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+	img {
+		margin-right: 12px;
+		vertical-align: middle;
+	}
+	> div {
+		margin-right: 0px !important;
+		display: inline-block;
+		vertical-align: top;
+		line-height: normal;
+	}
+	> div > span {
+		display: block;
+		padding-bottom: 1px;
+	}
 }
 
 
@@ -612,6 +655,7 @@ label.forcheckbox {
 		img {
 		    max-height: 32px;
 			max-width: 120px;
+			margin-right: 5px;
 		    vertical-align: top;
 		}
 		
@@ -738,7 +782,6 @@ td.adminTitle > .ctl-label {
 	label {
 		display: inline-block;
 		padding-right: 20px;
-		margin-top: 1px;
 		margin-bottom: 0;
 	}
 
@@ -814,21 +857,33 @@ tr.adminSeparator hr {
     padding: 0;
 }
 
-.plugin-intro-table {
+.plugin-configuration {
+	display: table;
 	width: 100%;
 	clear: both;
 
-	td {
+	> div {
+		display: table-cell;
 		vertical-align: top;
 	}
-
-	td:first-child {
+	> div:first-child {
 		width: 80%;
 	}
-
-	td:last-child {
+	> div:last-child {
 		float: right;
-		padding-left: 14px;
+		padding-left: 50px;
+	}
+}
+
+.admin-table {
+	.disabled {
+		.muted();
+	}
+	.centered {
+		text-align: center;
+	}
+	.progress-info {
+		min-width: 260px;
 	}
 }
 
@@ -848,6 +903,7 @@ label {
 }
 
 .mr8 { margin-right: 8px; }
+.ml4 { margin-left: 4px; }
 
 /* MASTER HEADER */
 .header-menu,

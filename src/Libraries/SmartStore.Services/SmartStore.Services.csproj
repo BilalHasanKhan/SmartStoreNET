@@ -117,9 +117,11 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.EnterpriseServices" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Linq.Dynamic">
       <HintPath>..\..\packages\System.Linq.Dynamic.1.0.0\lib\net40\System.Linq.Dynamic.dll</HintPath>
     </Reference>
+    <Reference Include="System.Net.Http" />
     <Reference Include="System.ServiceModel" />
     <Reference Include="System.Web" />
     <Reference Include="System.Web.Helpers, Version=3.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
@@ -167,10 +169,36 @@
     <Compile Include="Common\TempFileCleanupTask.cs" />
     <Compile Include="Common\UAParserUserAgent.cs" />
     <Compile Include="Customers\CustomerRegisteredEvent.cs" />
+    <Compile Include="DataExchange\ExportConfigurationInfo.cs" />
+    <Compile Include="DataExchange\ExportProvider\ExportNewsSubscriptionCsvProvider.cs" />
+    <Compile Include="DataExchange\ExportProvider\ExportCustomerXmlProvider.cs" />
+    <Compile Include="DataExchange\ExportProvider\ExportCategoryXmlProvider.cs" />
+    <Compile Include="DataExchange\ExportProvider\ExportCustomerXlsxProvider.cs" />
+    <Compile Include="DataExchange\ExportProvider\ExportOrderXlsxProvider.cs" />
+    <Compile Include="DataExchange\ExportProvider\ExportManufacturerXmlProvider.cs" />
+    <Compile Include="DataExchange\ExportProvider\ExportProductXlsxProvider.cs" />
+    <Compile Include="DataExchange\ExportProvider\ExportProductXmlProvider.cs" />
+    <Compile Include="DataExchange\ExportProvider\ExportOrderXmlProvider.cs" />
+    <Compile Include="DataExchange\ExportTask\ExportDataContextCategory.cs" />
+    <Compile Include="DataExchange\ExportTask\ExportDataContextCustomer.cs" />
+    <Compile Include="DataExchange\ExportTask\ExportDataContextManufacturer.cs" />
+    <Compile Include="DataExchange\ExportTask\ExportProfileTaskContext.cs" />
+    <Compile Include="DataExchange\ExportExecuteResult.cs" />
+    <Compile Include="DataExchange\ExportXmlHelper.cs" />
     <Compile Include="DataExchange\ISyncMappingService.cs" />
     <Compile Include="DataExchange\SyncMappingService.cs" />
+    <Compile Include="DataExchange\ExportTask\ExportDataContextOrder.cs" />
+    <Compile Include="DataExchange\ExportTask\ExportDataContextProduct.cs" />
+    <Compile Include="DataExchange\ExportExecuteContext.cs" />
+    <Compile Include="DataExchange\ExportExtensions.cs" />
+    <Compile Include="DataExchange\ExportTask\ExportProfileTask.cs" />
+    <Compile Include="DataExchange\ExportAttributes.cs" />
+    <Compile Include="DataExchange\ExportSegmenter.cs" />
     <Compile Include="Directory\QuantityUnitService.cs" />
     <Compile Include="Directory\IQuantityUnitService.cs" />
+    <Compile Include="DataExchange\ExportService.cs" />
+    <Compile Include="DataExchange\IExportProvider.cs" />
+    <Compile Include="DataExchange\IExportService.cs" />
     <Compile Include="Hooks\SlugSupportedPostDeleteHook.cs" />
     <Compile Include="Hooks\StoreMappingEntityPostDeleteHook.cs" />
     <Compile Include="Media\MediaExtensions.cs" />
@@ -303,7 +331,6 @@
     <Compile Include="Discounts\DiscountService.cs" />
     <Compile Include="Discounts\IDiscountRequirementRule.cs" />
     <Compile Include="Discounts\IDiscountService.cs" />
-    <Compile Include="ExportImport\ExportManager.cs" />
     <Compile Include="ExportImport\ImportManager.cs" />
     <Compile Include="Authentication\FormsAuthenticationService.cs" />
     <Compile Include="Forums\ForumService.cs" />
@@ -323,7 +350,6 @@
     <Compile Include="Customers\ICustomerService.cs" />
     <Compile Include="Directory\IMeasureService.cs" />
     <Compile Include="Directory\IStateProvinceService.cs" />
-    <Compile Include="ExportImport\IExportManager.cs" />
     <Compile Include="ExportImport\IImportManager.cs" />
     <Compile Include="Localization\LocalizationExtentions.cs" />
     <Compile Include="Directory\MeasureService.cs" />

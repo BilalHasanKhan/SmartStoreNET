@@ -1,6 +1,6 @@
 using System.Collections.Generic;
-using SmartStore.Core.Domain.Catalog;
 using SmartStore.Collections;
+using SmartStore.Core.Domain.Catalog;
 
 namespace SmartStore.Services.Catalog
 {
@@ -32,6 +32,15 @@ namespace SmartStore.Services.Catalog
         /// <returns>Product variant attribute values</returns>
         IEnumerable<ProductVariantAttributeValue> ParseProductVariantAttributeValues(string attributesXml);
 
+		/// <summary>
+		/// Get list of localized product variant attribute values
+		/// </summary>
+		/// <param name="attributesXml">XML formatted attributes</param>
+		/// <param name="attributes">Product variant attributes</param>
+		/// <param name="languageId">Language identifier</param>
+		/// <returns>List of localized product variant attribute values</returns>
+		IList<string> ParseProductVariantAttributeValues(string attributesXml, IEnumerable<ProductVariantAttribute> attributes, int languageId = 0);
+
         /// <summary>
         /// Gets selected product variant attribute value
         /// </summary>
@@ -54,17 +63,8 @@ namespace SmartStore.Services.Catalog
         /// </summary>
         /// <param name="attributeXml1">The attributes of the first product</param>
         /// <param name="attributeXml2">The attributes of the second product</param>
-		/// <param name="attributes">Collection of already loaded product attribute mappings to reduce database round trips</param>
         /// <returns>Result</returns>
-		bool AreProductAttributesEqual(string attributeXml1, string attributeXml2, IEnumerable<ProductVariantAttribute> attributes = null);
-
-        /// <summary>
-        /// Finds a product variant attribute combination by attributes stored in XML 
-        /// </summary>
-		/// <param name="product">Product</param>
-		/// <param name="attributesXml">XML formatted attributes</param>
-        /// <returns>Found product variant attribute combination</returns>
-		ProductVariantAttributeCombination FindProductVariantAttributeCombination(Product product, string attributesXml);
+		bool AreProductAttributesEqual(string attributeXml1, string attributeXml2);
 
 		/// <summary>
 		/// Finds a product variant attribute combination by attributes stored in XML 
@@ -82,13 +82,47 @@ namespace SmartStore.Services.Catalog
 		List<List<int>> DeserializeQueryData(string jsonData);
 
 		/// <summary>
+		/// Deserializes attribute data
+		/// </summary>
+		/// <param name="queryData">List with deserialized data</param>
+		/// <param name="attributesXml">XML formatted attributes</param>
+		/// <param name="productId">Product identifier</param>
+		/// <param name="bundleItemId">Bundle item identifier</param>
+		void DeserializeQueryData(List<List<int>> queryData, string attributesXml, int productId, int bundleItemId = 0);
+
+		/// <summary>
 		/// Serializes attribute data
 		/// </summary>
-		/// <param name="productId">Product identifier</param>
 		/// <param name="attributesXml">XML formatted attributes</param>
+		/// <param name="productId">Product identifier</param>
 		/// <param name="urlEncode">Whether to URL encode</param>
 		/// <returns>Json string with attribute data</returns>
-		string SerializeQueryData(int productId, string attributesXml, bool urlEncode = true);
+		string SerializeQueryData(string attributesXml, int productId, bool urlEncode = true);
+
+		/// <summary>
+		/// Serializes attribute data
+		/// </summary>
+		/// <param name="queryData">List with deserialized data</param>
+		/// <param name="urlEncode">Whether to URL encode</param>
+		/// <returns>Json string with attribute data</returns>
+		string SerializeQueryData(List<List<int>> queryData, bool urlEncode = true);
+
+		/// <summary>
+		/// Gets the URL of the product page including attributes query string
+		/// </summary>
+		/// <param name="attributesXml">XML formatted attributes</param>
+		/// <param name="productId">Product identifier</param>
+		/// <param name="productSeName">Product SEO name</param>
+		/// <returns>URL of the product page including attributes query string</returns>
+		string GetProductUrlWithAttributes(string attributesXml, int productId, string productSeName);
+
+		/// <summary>
+		/// Gets the URL of the product page including attributes query string
+		/// </summary>
+		/// <param name="queryData">Attribute query data</param>
+		/// <param name="productSeName">Product SEO name</param>
+		/// <returns>URL of the product page including attributes query string</returns>
+		string GetProductUrlWithAttributes(List<List<int>> queryData, string productSeName);
 
         #endregion
 

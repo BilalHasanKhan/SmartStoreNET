@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Web;
 using System.Web.Mvc;
 using SmartStore.Collections;
@@ -11,7 +12,7 @@ using SmartStore.Core.Domain.Customers;
 using SmartStore.Core.Domain.Directory;
 using SmartStore.Core.Domain.Media;
 using SmartStore.Core.Domain.Tax;
-using SmartStore.Core.Localization; 
+using SmartStore.Core.Localization;
 using SmartStore.Core.Logging;
 using SmartStore.Services;
 using SmartStore.Services.Catalog;
@@ -20,7 +21,7 @@ using SmartStore.Services.Customers;
 using SmartStore.Services.Directory;
 using SmartStore.Services.Helpers;
 using SmartStore.Services.Localization;
-using SmartStore.Services.Media; 
+using SmartStore.Services.Media;
 using SmartStore.Services.Security;
 using SmartStore.Services.Seo;
 using SmartStore.Services.Tax;
@@ -29,6 +30,8 @@ using SmartStore.Web.Framework.UI.Captcha;
 using SmartStore.Web.Infrastructure.Cache;
 using SmartStore.Web.Models.Catalog;
 using SmartStore.Web.Models.Media;
+using SmartStore.Core.Data;
+using System.Collections.Specialized;
 
 namespace SmartStore.Web.Controllers
 {
@@ -140,8 +143,12 @@ namespace SmartStore.Web.Controllers
 
 		public ILogger Logger { get; set; }
 
-		public ProductDetailsModel PrepareProductDetailsPageModel(Product product, bool isAssociatedProduct = false,
-			ProductBundleItemData productBundleItem = null, IList<ProductBundleItemData> productBundleItems = null, FormCollection selectedAttributes = null)
+		public ProductDetailsModel PrepareProductDetailsPageModel(
+			Product product, 
+			bool isAssociatedProduct = false,
+			ProductBundleItemData productBundleItem = null, 
+			IList<ProductBundleItemData> productBundleItems = null, 
+			NameValueCollection selectedAttributes = null)
 		{
 			if (product == null)
 				throw new ArgumentNullException("product");
@@ -200,11 +207,10 @@ namespace SmartStore.Web.Controllers
 
 			IList<ProductBundleItemData> bundleItems = null;
 			ProductVariantAttributeCombination combination = null;
-			var combinationImageIds = new List<int>();
 
 			if (product.ProductType == ProductType.GroupedProduct && !isAssociatedProduct)	// associated products
 			{
-				var searchContext = new ProductSearchContext()
+				var searchContext = new ProductSearchContext
 				{
 					StoreId = _services.StoreContext.CurrentStore.Id,
 					ParentGroupedProductId = product.Id,
@@ -224,7 +230,7 @@ namespace SmartStore.Web.Controllers
 				foreach (var itemData in bundleItems.Where(x => x.Item.Product.CanBeBundleItem()))
 				{
 					var item = itemData.Item;
-					var bundledProductModel = PrepareProductDetailsPageModel(item.Product, false, itemData);
+					var bundledProductModel = PrepareProductDetailsPageModel(item.Product, false, itemData, null, selectedAttributes);
 
 					bundledProductModel.BundleItem.Id = item.Id;
 					bundledProductModel.BundleItem.Quantity = item.Quantity;
@@ -246,17 +252,18 @@ namespace SmartStore.Web.Controllers
 
 			model = PrepareProductDetailModel(model, product, isAssociatedProduct, productBundleItem, bundleItems, selectedAttributes);
 
+			IList<int> combinationPictureIds = null;
+
 			if (productBundleItem == null)
 			{
-				model.Combinations.GetAllCombinationImageIds(combinationImageIds);
-
-				if (combination == null && model.CombinationSelected != null)
-					combination = model.CombinationSelected;
+				combinationPictureIds = _productAttributeService.GetAllProductVariantAttributeCombinationPictureIds(product.Id);
+                if (combination == null && model.SelectedCombination != null)
+					combination = model.SelectedCombination;
 			}
 
 			// pictures
 			var pictures = _pictureService.GetPicturesByProductId(product.Id);
-			PrepareProductDetailsPictureModel(model.DetailsPictureModel, pictures, model.Name, combinationImageIds, isAssociatedProduct, productBundleItem, combination);
+			PrepareProductDetailsPictureModel(model.DetailsPictureModel, pictures, model.Name, combinationPictureIds, isAssociatedProduct, productBundleItem, combination);
 
 			return model;
 		}
@@ -314,8 +321,14 @@ namespace SmartStore.Web.Controllers
 			return result;
 		}
 
-		public void PrepareProductDetailsPictureModel(ProductDetailsPictureModel model, IList<Picture> pictures, string name, List<int> allCombinationImageIds,
-			bool isAssociatedProduct, ProductBundleItemData bundleItem = null, ProductVariantAttributeCombination combination = null)
+		public void PrepareProductDetailsPictureModel(
+			ProductDetailsPictureModel model, 
+			IList<Picture> pictures, 
+			string name, 
+			IList<int> allCombinationImageIds,
+			bool isAssociatedProduct, 
+			ProductBundleItemData bundleItem = null, 
+			ProductVariantAttributeCombination combination = null)
 		{
 			model.Name = name;
 			model.DefaultPictureZoomEnabled = _mediaSettings.DefaultPictureZoomEnabled;
@@ -352,7 +365,8 @@ namespace SmartStore.Web.Controllers
 				else
 				{
 					// images not belonging to any combination...
-					foreach (var picture in pictures.Where(p => !allCombinationImageIds.Contains(p.Id)))
+					allCombinationImageIds = allCombinationImageIds ?? new List<int>();
+                    foreach (var picture in pictures.Where(p => !allCombinationImageIds.Contains(p.Id)))
 					{
 						model.PictureModels.Add(CreatePictureModel(model, picture, _mediaSettings.ProductDetailsPictureSize));
 					}
@@ -383,7 +397,7 @@ namespace SmartStore.Web.Controllers
 			// default picture
 			if (defaultPicture == null)
 			{
-				model.DefaultPictureModel = new PictureModel()
+				model.DefaultPictureModel = new PictureModel
 				{
 					ThumbImageUrl = _pictureService.GetDefaultPictureUrl(_mediaSettings.ProductThumbPictureSizeOnProductDetailsPage),
 					ImageUrl = _pictureService.GetDefaultPictureUrl(defaultPictureSize),
@@ -405,7 +419,7 @@ namespace SmartStore.Web.Controllers
 			bool isAssociatedProduct = false,
 			ProductBundleItemData productBundleItem = null,
 			IList<ProductBundleItemData> productBundleItems = null,
-			FormCollection selectedAttributes = null,
+			NameValueCollection selectedAttributes = null,
 			int selectedQuantity = 1)
 		{
 			if (product == null)
@@ -415,7 +429,7 @@ namespace SmartStore.Web.Controllers
 				throw new ArgumentNullException("model");
 
 			if (selectedAttributes == null)
-				selectedAttributes = new FormCollection();
+				selectedAttributes = new NameValueCollection();
 
 			decimal preSelectedPriceAdjustmentBase = decimal.Zero;
 			decimal preSelectedWeightAdjustment = decimal.Zero;
@@ -579,8 +593,6 @@ namespace SmartStore.Web.Controllers
 
 			if (!isBundle)
 			{
-				model.Combinations = _productAttributeService.GetAllProductVariantAttributeCombinations(product.Id);
-
 				if (selectedAttributes.Count > 0)
 				{
 					// merge with combination data if there's a match
@@ -597,16 +609,15 @@ namespace SmartStore.Web.Controllers
 							renderPrices: false, renderGiftCardAttributes: false, allowHyperlinks: false);
 					}
 
-					model.CombinationSelected = model.Combinations
-						.FirstOrDefault(x => _productAttributeParser.AreProductAttributesEqual(x.AttributesXml, attributeXml, variantAttributes));
+					model.SelectedCombination = _productAttributeParser.FindProductVariantAttributeCombination(product.Id, attributeXml);
 
-					if (model.CombinationSelected != null && model.CombinationSelected.IsActive == false)
+					if (model.SelectedCombination != null && model.SelectedCombination.IsActive == false)
 					{
 						model.IsAvailable = false;
                         model.StockAvailability = T("Products.Availability.IsNotActive");
 					}
 
-					product.MergeWithCombination(model.CombinationSelected);
+					product.MergeWithCombination(model.SelectedCombination);
 
 					// mark explicitly selected as pre-selected
 					foreach (var attribute in model.ProductVariantAttributes)
@@ -632,8 +643,9 @@ namespace SmartStore.Web.Controllers
 			{
 				// cases where stock inventory is not functional. determined by what ShoppingCartService.GetStandardWarnings and ProductService.AdjustInventory is not handling.
 				model.IsAvailable = true;
-                model.StockAvailability = product.ProductVariantAttributeCombinations.Count == 0 ? product.FormatStockMessage(_localizationService) : "";
-			}
+				var hasAttributeCombinations = _services.DbContext.QueryForCollection(product, (Product p) => p.ProductVariantAttributeCombinations).Any();
+                model.StockAvailability = !hasAttributeCombinations ? product.FormatStockMessage(_localizationService) : "";
+            }
 			else if (model.IsAvailable)
 			{
 				model.IsAvailable = product.IsAvailableByStock();
@@ -659,7 +671,7 @@ namespace SmartStore.Web.Controllers
 			model.HasSampleDownload = product.IsDownload && product.HasSampleDownload;
 			model.IsCurrentCustomerRegistered = _services.WorkContext.CurrentCustomer.IsRegistered();
 			model.IsBasePriceEnabled = product.BasePriceEnabled;
-			model.BasePriceInfo = product.GetBasePriceInfo(_localizationService, _priceFormatter);
+            model.BasePriceInfo = product.GetBasePriceInfo(_localizationService, _priceFormatter, _currencyService, _taxService, _priceCalculationService, _services.WorkContext.WorkingCurrency);
 			model.ShowLegalInfo = _taxSettings.ShowLegalHintsInProductDetails;
 			model.BundleTitleText = product.GetLocalized(x => x.BundleTitleText);
 			model.BundlePerItemPricing = product.BundlePerItemPricing;
@@ -687,11 +699,15 @@ namespace SmartStore.Web.Controllers
 			}
 
 			string shippingInfoLink = _urlHelper.RouteUrl("Topic", new { SystemName = "shippinginfo" });
-            
-            if (!product.IsTaxExempt && !product.IsShipEnabled)
-                model.LegalInfo += "{0} {1}, {2}".FormatWith(taxInfo, defaultTaxRate, T("Common.FreeShipping"));
 
-            if(product.IsShipEnabled) 
+            if (!product.IsShipEnabled || (addShippingPrice == 0 && product.IsFreeShipping))
+            {
+                model.LegalInfo += "{0} {1}, {2}".FormatWith(
+                    product.IsTaxExempt ? "" : taxInfo,
+                    product.IsTaxExempt ? "" : defaultTaxRate,
+                    T("Common.FreeShipping"));
+            }
+            else
             {
                 model.LegalInfo = T("Tax.LegalInfoProductDetail",
                     product.IsTaxExempt ? "" : taxInfo,
@@ -839,7 +855,14 @@ namespace SmartStore.Web.Controllers
 
 						model.ProductPrice.PriceValue = finalPriceWithoutDiscount;
 						model.ProductPrice.PriceWithDiscountValue = finalPriceWithDiscount;
-						model.BasePriceInfo = product.GetBasePriceInfo(_localizationService, _priceFormatter, attributesTotalPriceBase);
+                        model.BasePriceInfo = product.GetBasePriceInfo(
+                            _localizationService, 
+                            _priceFormatter, 
+                            _currencyService, 
+                            _taxService, 
+                            _priceCalculationService,
+                            _services.WorkContext.WorkingCurrency, 
+                            attributesTotalPriceBase);
 
 						if (!string.IsNullOrWhiteSpace(model.ProductPrice.OldPrice) || !string.IsNullOrWhiteSpace(model.ProductPrice.PriceWithDiscount))
 						{
@@ -852,7 +875,14 @@ namespace SmartStore.Web.Controllers
                             {
                                 model.ProductPrice.NoteWithDiscount = T("Products.Bundle.PriceWithDiscount.Note");
                             }
-                            model.BasePriceInfo = product.GetBasePriceInfo(_localizationService, _priceFormatter, (product.Price - finalPriceWithDiscount) * (-1));
+                            model.BasePriceInfo = product.GetBasePriceInfo(
+                                _localizationService, 
+                                _priceFormatter, 
+                                _currencyService,
+                                _taxService, 
+                                _priceCalculationService,
+                                _services.WorkContext.WorkingCurrency, 
+                                (product.Price - finalPriceWithDiscount) * (-1));
 						}
 					}
 				}
@@ -1316,7 +1346,7 @@ namespace SmartStore.Web.Controllers
 
 				if (_catalogSettings.ShowBasePriceInProductLists)
 				{
-					model.BasePriceInfo = contextProduct.GetBasePriceInfo(_localizationService, _priceFormatter);
+                    model.BasePriceInfo = contextProduct.GetBasePriceInfo(_localizationService, _priceFormatter, _currencyService, _taxService, _priceCalculationService,  workingCurrency);
 				}
 
 				var addShippingPrice = _currencyService.ConvertCurrency(contextProduct.AdditionalShippingCharge, currentStore.PrimaryStoreCurrency, workingCurrency);

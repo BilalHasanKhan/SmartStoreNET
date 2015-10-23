@@ -1,8 +1,9 @@
-# Release Notes
+﻿# Release Notes
 
 ## SmartStore.NET 2.5
 
 ### New Features
+* #701 Implement new export framework
 * #141 Payment and shipping methods by customer roles
 * #67 Restrict payment methods to countries
 * #94 Restrict payment methods to shipping methods
@@ -21,7 +22,8 @@
 * #607 HTML capable full description for payment methods displayed in checkout
 * #732 Product list: Option to display the pre-selected price instead of the lowest price
 * New payment provider for Offline Payment Plugin: Purchase Order Number
-* #202 Implement option for product list 'default sort order' 
+* #202 Implement option for product list 'default sort order'
+* #360 Import & export product variant combinations
 
 ### Improvements
 * (Perf) Implemented static caches for URL aliases and localized properties. Increases app startup and request speed by up to 30%.
@@ -45,12 +47,26 @@
 * #62 free shipping info on product detail page
 * Display base price in CompactProductBox
 * Automatically redirect to referrer after login
-* #249 Make UI editor for 'SeoSettings.ExtraRobotsDisallows' 
+* #249 Make UI editor for 'SeoSettings.ExtraRobotsDisallows'
+* Debitoor: Customer VAT number not transmitted anymore because it appears on the Debitoor invoice.
+* #778 Web-API: Increase MaxExpansionDepth for using expand pathes
+* #767 Remove assignments to a grouped product if the grouped product is deleted
+* #773 Reduce number of guest records created by search engine requests
+* #791 Preselected attributes or attribute combinations should always be appended as querystring to product page links
 
 ### Bugfixes
 * #523 Redirecting to payment provider performed by core instead of plugin
 * Preselected price was wrong for product attributes with multiple preselected values (same on product detail page)
 * #749 Visual Studio 2015 compilation error: CS0009: Metadata file. SmartStore.Licensing.dll could not be opened -- Illegal tables in compressed metadata stream
+* PayPal Express: fixed capture method
+* #770 Resizing browser with product details page causes product image to disappear
+* GMC feed: Availability value "available for order" deprecated
+* Mobile: Shopping cart warnings weren't displayed to customers
+* Tax provider and payment method were automatically activated when there were no active provider\method
+* #784 Biz-Importer: Name of delivery time must not be imported empty
+* #776 Preview: Manufacturer and Product in Multi Store
+* #755 Some methods still loading all products in one go
+* #796 Selected specification in product filter mask is displayed with default language (not localized)
 
 
 ## SmartStore.NET 2.2.2

@@ -6,7 +6,7 @@ using System.Linq;
 namespace SmartStore.Collections
 {
 	/// <summary>
-	/// Structure that manages data keys and offers the combination of early and lazy data loading
+	/// Manages data keys and offers a combination of eager and lazy data loading
 	/// </summary>
 	public class LazyMultimap<T> : Multimap<int, T>
 	{
@@ -19,7 +19,7 @@ namespace SmartStore.Collections
 		/// Constructor
 		/// </summary>
 		/// <param name="load"><para>int[]</para> keys like Entity.Id, <para>Multimap<int, T>></para> delegate to load data</param>
-		/// <param name="collect">Keys of early loaded data</param>
+		/// <param name="collect">Keys of eager loaded data</param>
 		public LazyMultimap(Func<int[], Multimap<int, T>> load, IEnumerable<int> collect = null)
 		{
 			_load = load;
@@ -70,6 +70,11 @@ namespace SmartStore.Collections
 		/// <returns>Collection of data</returns>
 		public virtual ICollection<T> Load(int key)
 		{
+			if (key == 0)
+			{
+				return new List<T>();
+			}
+
 			if (!_loaded.Contains(key))
 			{
 				Load(new int[] { key });
@@ -92,6 +97,18 @@ namespace SmartStore.Collections
 			if (keys != null && keys.Any())
 			{
 				_collect = _collect.Union(keys).ToList();
+			}
+		}
+
+		/// <summary>
+		/// Collect single key for combinde loading
+		/// </summary>
+		/// <param name="key">Data key</param>
+		public virtual void Collect(int key)
+		{
+			if (key != 0 && !_collect.Contains(key))
+			{
+				_collect.Add(key);
 			}
 		}
 	}

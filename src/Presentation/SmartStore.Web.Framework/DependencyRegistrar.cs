@@ -74,6 +74,7 @@ using SmartStore.Web.Framework.UI;
 using SmartStore.Web.Framework.WebApi;
 using SmartStore.Web.Framework.WebApi.Configuration;
 using Module = Autofac.Module;
+using SmartStore.Core.Domain.DataExchange;
 
 namespace SmartStore.Web.Framework
 {
@@ -217,14 +218,10 @@ namespace SmartStore.Web.Framework
 
             builder.RegisterType<ScheduleTaskService>().As<IScheduleTaskService>().InstancePerRequest();
 
-			builder.RegisterType<ExportManager>().As<IExportManager>()
-				.WithParameter(ResolvedParameter.ForNamed<IProductService>("nocache"))
-				.WithParameter(ResolvedParameter.ForNamed<ICategoryService>("nocache"))
-				.WithParameter(ResolvedParameter.ForNamed<IManufacturerService>("nocache"))
-				.InstancePerRequest();
-
             builder.RegisterType<ImportManager>().As<IImportManager>().InstancePerRequest();
 			builder.RegisterType<SyncMappingService>().As<ISyncMappingService>().InstancePerRequest();
+
+			builder.RegisterType<ExportService>().As<IExportService>().InstancePerRequest();
 
             builder.RegisterType<MobileDeviceHelper>().As<IMobileDeviceHelper>().InstancePerRequest();
 			builder.RegisterType<UAParserUserAgent>().As<IUserAgent>().InstancePerRequest();
@@ -770,6 +767,8 @@ namespace SmartStore.Web.Framework
 				var settingPattern = (pluginDescriptor != null ? "Plugins" : "Providers") + ".{0}.{1}"; // e.g. Plugins.MySystemName.DisplayOrder
 				var isConfigurable = typeof(IConfigurable).IsAssignableFrom(type);
 				var isEditable = typeof(IUserEditable).IsAssignableFrom(type);
+				var isHidden = GetIsHidden(type);
+				var exportSupport = GetExportSupport(type);				
 
 				var registration = builder.RegisterType(type).Named<IProvider>(systemName).InstancePerRequest().PropertiesAutowired(PropertyWiringOptions.None);
 				registration.WithMetadata<ProviderMetadata>(m =>
@@ -785,6 +784,8 @@ namespace SmartStore.Web.Framework
 					m.For(em => em.DependentWidgets, dependentWidgets);
 					m.For(em => em.IsConfigurable, isConfigurable);
 					m.For(em => em.IsEditable, isEditable);
+					m.For(em => em.IsHidden, isHidden);
+					m.For(em => em.ExportSupport, exportSupport);
 				});
 
 				// register specific provider type
@@ -795,6 +796,7 @@ namespace SmartStore.Web.Framework
 				RegisterAsSpecificProvider<IWidget>(type, systemName, registration);
 				RegisterAsSpecificProvider<IExternalAuthenticationMethod>(type, systemName, registration);
 				RegisterAsSpecificProvider<IPaymentMethod>(type, systemName, registration);
+				RegisterAsSpecificProvider<IExportProvider>(type, systemName, registration);
 			}
 
 		}
@@ -848,6 +850,29 @@ namespace SmartStore.Web.Framework
 			}
 
 			return 0;
+		}
+
+		private bool GetIsHidden(Type type)
+		{
+			var attr = type.GetAttribute<IsHiddenAttribute>(false);
+			if (attr != null)
+			{
+				return attr.IsHidden;
+			}
+
+			return false;
+		}
+
+		private ExportSupport[] GetExportSupport(Type type)
+		{
+			var attr = type.GetAttribute<ExportSupportingAttribute>(false);
+
+			if (attr != null && attr.Types != null)
+			{
+				return attr.Types;
+			}
+
+			return new ExportSupport[0];
 		}
 
 		private Tuple<string/*Name*/, string/*Description*/> GetFriendlyName(Type type, PluginDescriptor descriptor)
@@ -919,6 +944,10 @@ namespace SmartStore.Web.Framework
 			else if (typeof(IWidget).IsAssignableFrom(implType))
 			{
 				return "CMS";
+			}
+			else if (typeof(IExportProvider).IsAssignableFrom(implType))
+			{
+				return "Exporting";
 			}
 
 			return null;
