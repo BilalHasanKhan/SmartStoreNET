@@ -1,4 +1,4 @@
-﻿# Release Notes
+# Release Notes
 
 ## SmartStore.NET 2.5
 
@@ -7,6 +7,7 @@
 * #141 Payment and shipping methods by customer roles
 * #67 Restrict payment methods to countries
 * #94 Restrict payment methods to shipping methods
+* #747 Restrict payment methods by old versus new customer (plugin)
 * #584 Email attachment support for message templates
 * Attach order invoice PDF automatically to order notification emails
 * #526 Min/Max amount option for which the payment method should be offered during checkout
@@ -24,6 +25,9 @@
 * New payment provider for Offline Payment Plugin: Purchase Order Number
 * #202 Implement option for product list 'default sort order'
 * #360 Import & export product variant combinations
+* #722 System > SEO Names: Implement editing of an UrlRecord
+* Admin > System > System Info shows used application memory (RAM)
+* Added option to make VATIN mandatory during customer registration
 
 ### Improvements
 * (Perf) Implemented static caches for URL aliases and localized properties. Increases app startup and request speed by up to 30%.
@@ -53,6 +57,7 @@
 * #767 Remove assignments to a grouped product if the grouped product is deleted
 * #773 Reduce number of guest records created by search engine requests
 * #791 Preselected attributes or attribute combinations should always be appended as querystring to product page links
+* Simplified managing of SEO names
 
 ### Bugfixes
 * #523 Redirecting to payment provider performed by core instead of plugin

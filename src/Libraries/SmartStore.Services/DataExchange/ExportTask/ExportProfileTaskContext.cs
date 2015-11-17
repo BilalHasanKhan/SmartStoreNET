@@ -14,16 +14,17 @@ using SmartStore.Core.Logging;
 using SmartStore.Core.Plugins;
 using SmartStore.Services.Tasks;
 using SmartStore.Utilities;
+using SmartStore.Services.DataExchange.Internal;
 
 namespace SmartStore.Services.DataExchange.ExportTask
 {
 	internal class ExportProfileTaskContext
 	{
-		private ExportDataContextProduct _dataContextProduct;
-		private ExportDataContextOrder _dataContextOrder;
-		private ExportDataContextManufacturer _dataContextManufacturer;
-		private ExportDataContextCategory _dataContextCategory;
-		private ExportDataContextCustomer _dataContextCustomer;
+		private ProductExportContext _productExportContext;
+		private OrderExportContext _orderExportContext;
+		private ManufacturerExportContext _manufacturerExportContext;
+		private CategoryExportContext _categoryExportContext;
+		private CustomerExportContext _customerExportContext;
 
 		public ExportProfileTaskContext(
 			TaskExecutionContext taskContext,
@@ -40,8 +41,8 @@ namespace SmartStore.Services.DataExchange.ExportTask
 			EntityIdsSelected = selectedIds.SplitSafe(",").Select(x => x.ToInt()).ToList();
 			PreviewData = previewData;
 
-			Supporting = Enum.GetValues(typeof(ExportSupport))
-				.Cast<ExportSupport>()
+			SupportedFeatures = Enum.GetValues(typeof(ExportFeatures))
+				.Cast<ExportFeatures>()
 				.ToDictionary(x => x, x => Provider.Supports(x));
 
 			FolderContent = FileSystemHelper.TempDir(@"Profile\Export\{0}\Content".FormatInvariant(profile.FolderName));
@@ -56,13 +57,13 @@ namespace SmartStore.Services.DataExchange.ExportTask
 			RecordsPerStore = new Dictionary<int, int>();
 			EntityIdsLoaded = new List<int>();
 
-			Result = new ExportExecuteResult
+			Result = new DataExportResult
 			{
 				FileFolder = (IsFileBasedExport ? FolderContent : null)
 			};
 
-			Export = new ExportExecuteContext(Result, TaskContext.CancellationToken, FolderContent);
-			Export.Projection = XmlHelper.Deserialize<ExportProjection>(profile.Projection);
+			ExecuteContext = new ExportExecuteContext(Result, TaskContext.CancellationToken, FolderContent);
+			ExecuteContext.Projection = XmlHelper.Deserialize<ExportProjection>(profile.Projection);
 		}
 
 		public List<int> EntityIdsSelected { get; private set; }
@@ -83,10 +84,10 @@ namespace SmartStore.Services.DataExchange.ExportTask
 		public ExportProfile Profile { get; private set; }
 		public Provider<IExportProvider> Provider { get; private set; }
 
-		public Dictionary<ExportSupport, bool> Supporting { get; private set; }
-		public bool Supports(ExportSupport type)
+		public Dictionary<ExportFeatures, bool> SupportedFeatures { get; private set; }
+		public bool Supports(ExportFeatures feature)
 		{
-			return (!IsPreview && Supporting[type]);
+			return (!IsPreview && SupportedFeatures[feature]);
 		}
 
 		public ExportFilter Filter { get; private set; }
@@ -115,7 +116,7 @@ namespace SmartStore.Services.DataExchange.ExportTask
 
 		public bool IsFileBasedExport
 		{
-			get { return Provider.Value.FileExtension.HasValue(); }
+			get { return Provider == null || Provider.Value == null || Provider.Value.FileExtension.HasValue(); }
 		}
 		public string[] GetDeploymentFiles(ExportDeployment deployment)
 		{
@@ -140,78 +141,81 @@ namespace SmartStore.Services.DataExchange.ExportTask
 		public HashSet<string> NewsletterSubscriptions { get; set; }
 
 		// data loaded once per page
-		public ExportDataContextProduct DataContextProduct
+		public ProductExportContext ProductExportContext
 		{
 			get
 			{
-				return _dataContextProduct;
+				return _productExportContext;
 			}
 			set
 			{
-				if (_dataContextProduct != null)
-					_dataContextProduct.Clear();
+				if (_productExportContext != null)
+					_productExportContext.Clear();
 
-				_dataContextProduct = value;
+				_productExportContext = value;
 			}
 		}
-		public ExportDataContextOrder DataContextOrder
+
+		public OrderExportContext OrderExportContext
 		{
 			get
 			{
-				return _dataContextOrder;
+				return _orderExportContext;
 			}
 			set
 			{
-				if (_dataContextOrder != null)
-					_dataContextOrder.Clear();
+				if (_orderExportContext != null)
+					_orderExportContext.Clear();
 
-				_dataContextOrder = value;
+				_orderExportContext = value;
 			}
 		}
-		public ExportDataContextManufacturer DataContextManufacturer
+
+		public ManufacturerExportContext ManufacturerExportContext
 		{
 			get
 			{
-				return _dataContextManufacturer;
+				return _manufacturerExportContext;
 			}
 			set
 			{
-				if (_dataContextManufacturer != null)
-					_dataContextManufacturer.Clear();
+				if (_manufacturerExportContext != null)
+					_manufacturerExportContext.Clear();
 
-				_dataContextManufacturer = value;
+				_manufacturerExportContext = value;
 			}
 		}
-		public ExportDataContextCategory DataContextCategory
+
+		public CategoryExportContext CategoryExportContext
 		{
 			get
 			{
-				return _dataContextCategory;
+				return _categoryExportContext;
 			}
 			set
 			{
-				if (_dataContextCategory != null)
-					_dataContextCategory.Clear();
+				if (_categoryExportContext != null)
+					_categoryExportContext.Clear();
 
-				_dataContextCategory = value;
+				_categoryExportContext = value;
 			}
 		}
-		public ExportDataContextCustomer DataContextCustomer
+		public CustomerExportContext CustomerExportContext
 		{
 			get
 			{
-				return _dataContextCustomer;
+				return _customerExportContext;
 			}
 			set
 			{
-				if (_dataContextCustomer != null)
-					_dataContextCustomer.Clear();
+				if (_customerExportContext != null)
+					_customerExportContext.Clear();
 
-				_dataContextCustomer = value;
+				_customerExportContext = value;
 			}
 		}
 
-		public ExportExecuteContext Export { get; set; }
-		public ExportExecuteResult Result { get; set; }
+		public ExportExecuteContext ExecuteContext { get; set; }
+		public DataExportResult Result { get; set; }
 	}
 }

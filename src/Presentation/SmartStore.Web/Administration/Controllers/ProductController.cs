@@ -27,7 +27,7 @@ using SmartStore.Services;
 using SmartStore.Services.Catalog;
 using SmartStore.Services.Common;
 using SmartStore.Services.Customers;
-using SmartStore.Services.DataExchange.ExportProvider;
+using SmartStore.Services.DataExchange.Providers;
 using SmartStore.Services.Directory;
 using SmartStore.Services.Discounts;
 using SmartStore.Services.ExportImport;
@@ -45,6 +45,7 @@ using SmartStore.Web.Framework.Controllers;
 using SmartStore.Web.Framework.Mvc;
 using SmartStore.Web.Framework.Pdf;
 using Telerik.Web.Mvc;
+using SmartStore.Collections;
 
 namespace SmartStore.Admin.Controllers
 {
@@ -1271,7 +1272,9 @@ namespace SmartStore.Admin.Controllers
             {
 				var product = _productService.GetProductById(copyModel.Id);
                 var newProduct = _copyProductService.CopyProduct(product, copyModel.Name, copyModel.Published, copyModel.CopyImages);
+
                 NotifySuccess("The product is copied");
+
                 return RedirectToAction("Edit", new { id = newProduct.Id });
             }
             catch (Exception exc)
@@ -2794,7 +2797,7 @@ namespace SmartStore.Admin.Controllers
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCatalog))
                 return AccessDeniedView();
 
-			return Export(ExportProductXmlProvider.SystemName, null);
+			return Export(ProductXmlExportProvider.SystemName, null);
         }
 
 		[HttpPost, Compress]
@@ -2803,7 +2806,7 @@ namespace SmartStore.Admin.Controllers
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCatalog))
                 return AccessDeniedView();
 
-			return Export(ExportProductXmlProvider.SystemName, selectedIds);
+			return Export(ProductXmlExportProvider.SystemName, selectedIds);
         }
 
 		[Compress]
@@ -2812,7 +2815,7 @@ namespace SmartStore.Admin.Controllers
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCatalog))
                 return AccessDeniedView();
 
-			return Export(ExportProductXlsxProvider.SystemName, null);
+			return Export(ProductXlsxExportProvider.SystemName, null);
         }
 
 		[HttpPost, Compress]
@@ -2821,7 +2824,7 @@ namespace SmartStore.Admin.Controllers
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCatalog))
                 return AccessDeniedView();
 
-			return Export(ExportProductXlsxProvider.SystemName, selectedIds);
+			return Export(ProductXlsxExportProvider.SystemName, selectedIds);
         }
 
 		public ActionResult ExportPdf(bool all, string selectedIds = null)

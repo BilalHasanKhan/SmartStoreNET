@@ -18,9 +18,14 @@ namespace SmartStore.Admin.Models.DataExchange
 		public string AllString { get; set; }
 		public string UnspecifiedString { get; set; }
 		public bool LogFileExists { get; set; }
+		public bool HasActiveProvider { get; set; }
 
 		[SmartResourceDisplayName("Admin.DataExchange.Export.Name")]
 		public string Name { get; set; }
+
+		[SmartResourceDisplayName("Admin.DataExchange.Export.ProviderSystemName")]
+		public string ProviderSystemName { get; set; }
+		public List<ProviderSelectItem> AvailableProviders { get; set; }
 
 		[SmartResourceDisplayName("Admin.DataExchange.Export.FolderName")]
 		public string FolderName { get; set; }
@@ -89,7 +94,7 @@ namespace SmartStore.Admin.Models.DataExchange
 			public Type ConfigDataType { get; set; }
 			public object ConfigData { get; set; }
 
-			public ExportSupport[] Supporting { get; set; }
+			public ExportFeatures[] Supporting { get; set; }
 
 			[SmartResourceDisplayName("Common.Image")]
 			public string ThumbnailUrl { get; set; }
@@ -99,10 +104,6 @@ namespace SmartStore.Admin.Models.DataExchange
 
 			[SmartResourceDisplayName("Admin.Configuration.Plugins.Fields.Configure")]
 			public string ConfigurationUrl { get; set; }
-
-			[SmartResourceDisplayName("Admin.DataExchange.Export.ProviderSystemName")]
-			public string SystemName { get; set; }
-			public List<ProviderSelectItem> AvailableProviders { get; set; }
 
 			[SmartResourceDisplayName("Common.Provider")]
 			public string FriendlyName { get; set; }

@@ -38,7 +38,10 @@ namespace SmartStore.Data.Migrations
 		public void MigrateLocaleResources(LocaleResourcesBuilder builder)
 		{
 			builder.AddOrUpdate("Common.Example", "Example", "Beispiel");
+			builder.AddOrUpdate("Common.ShowAll", "Show all", "Alle anzeigen");
 			builder.AddOrUpdate("Admin.Common.Selected", "Selected", "Ausgewählte");
+			builder.AddOrUpdate("Admin.Common.Entity", "Entity", "Entität");
+
 
 			builder.AddOrUpdate("Admin.Common.FilesDeleted",
 				"{0} files were deleted",
@@ -47,6 +50,63 @@ namespace SmartStore.Data.Migrations
 			builder.AddOrUpdate("Admin.Common.FoldersDeleted",
 				"{0} folders were deleted",
 				"{0} Verzeichnisse wurden gelöscht");
+
+			builder.AddOrUpdate("Admin.Common.ProviderNotLoaded",
+				"Cannot load the provider {0}.",
+				"Der Provider {0} konnte nicht geladen werden.");
+
+			builder.AddOrUpdate("ActivityLog.EditPaymentMethod",
+				"Edited payment method '{0}' ({1})",
+				"Zahlungsart '{0}' ({1}) bearbeitet");
+
+			builder.AddOrUpdate("Admin.Configuration.Settings.Blog.ShowHeaderRSSUrl.Hint",
+				"Check to enable the blog RSS feed link in customers browser address bar.",
+				"Legt fest, ob der RSS-Feed-Link in der Adressleiste des Browsers angezeigt werden soll.");
+
+
+			builder.AddOrUpdate("Admin.System.SeNames",	"SEO Names", "SEO Namen");
+			builder.Delete("Admin.System.SeNames.DeleteSelected");
+
+			builder.AddOrUpdate("Admin.System.SeNames.Name",
+				"SEO Name",
+				"SEO Name",
+				"Specifies the SEO name.",
+				"Legt den SEO Namen fest.");
+
+			builder.AddOrUpdate("Admin.System.SeNames.EntityId",
+				"Entity ID",
+				"ID der Entität",
+				"Specifies the ID of the associated entity.",
+				"Legt die ID der zugehörigen Entität fest.");
+
+			builder.AddOrUpdate("Admin.System.SeNames.EntityName",
+				"Entity",
+				"Entität",
+				"Specifies the name of the associated entity.",
+				"Legt den Namen der zugehörigen Entität fest.");
+
+			builder.AddOrUpdate("Admin.System.SeNames.IsActive",
+				"Is active",
+				"Ist aktiv",
+				"Specifies whether the SEO name is active or inactive.",
+				"Legt fest, ob der SEO Name aktiv oder inaktiv ist.");
+
+			builder.AddOrUpdate("Admin.System.SeNames.Language",
+				"Language",
+				"Sprache",
+				"Specifies the language of the SEO name.",
+				"Legt die Sprache des SEO Namens fest.");
+
+			builder.AddOrUpdate("Admin.System.SeNames.SlugsPerEntity",
+				"Names per entity",
+				"Namen pro Entität",
+				"The number of SEO names per entity.",
+				"Die Anzahl der SEO Namen pro Entität.");
+
+			builder.AddOrUpdate("Admin.System.SeNames.ActiveSlugAlreadyExist",
+				"Only one active SEO name should be set per language.",
+				"Pro Sprache darf nur ein aktiver SEO Name festgelegt werden.");
+
 
 			builder.AddOrUpdate("Admin.DataExchange.Export.NotPreviewCompatible",
 				"This option is not taken into account in the preview.",
@@ -171,6 +231,24 @@ namespace SmartStore.Data.Migrations
 
 			builder.Delete("Plugins.Widgets.OpenTrans.IsLexwareCompatibe");
 			builder.Delete("Admin.System.Maintenance.DeleteExportedFolders.TotalDeleted");
+
+			// Common
+			builder.AddOrUpdate("StoreClosed",
+				"We'll be back.",
+				"Wir sind bald wieder da.");
+			builder.AddOrUpdate("StoreClosed.Hint",
+				"We're busy updating our online store for you and will be back soon.",
+				"Wir aktualisieren gerade das Angebot in unserem Online-Shop. Die Seite ist demnächst wieder verfügbar.");
+
+			builder.AddOrUpdate("Admin.System.SystemInfo.UsedMemorySize",
+				"Used memory (RAM)",
+				"Benutzter Speicher (RAM)");
+			builder.AddOrUpdate("Admin.System.SystemInfo.GarbageCollect",
+				"Collect",
+				"Aufräumen");
+			builder.AddOrUpdate("Admin.System.SystemInfo.GarbageCollectSuccessful",
+				"The memory has been successfully cleaned up.",
+				"Der Arbeitsspeicher wurde erfolgreich aufgeräumt.");
 		}
     }
 }

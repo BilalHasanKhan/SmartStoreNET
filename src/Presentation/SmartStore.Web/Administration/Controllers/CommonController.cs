@@ -21,7 +21,6 @@ using SmartStore.Core.Domain.Common;
 using SmartStore.Core.Domain.Customers;
 using SmartStore.Core.Domain.Directory;
 using SmartStore.Core.Domain.Security;
-using SmartStore.Core.Domain.Seo;
 using SmartStore.Core.Infrastructure;
 using SmartStore.Core.Logging;
 using SmartStore.Core.Packaging;
@@ -35,7 +34,6 @@ using SmartStore.Services.Localization;
 using SmartStore.Services.Media;
 using SmartStore.Services.Payments;
 using SmartStore.Services.Security;
-using SmartStore.Services.Seo;
 using SmartStore.Services.Shipping;
 using SmartStore.Utilities;
 using SmartStore.Web.Framework;
@@ -56,7 +54,6 @@ namespace SmartStore.Admin.Controllers
         private readonly Lazy<ICurrencyService> _currencyService;
         private readonly Lazy<IMeasureService> _measureService;
         private readonly ICustomerService _customerService;
-        private readonly IUrlRecordService _urlRecordService;
 		private readonly Lazy<CommonSettings> _commonSettings;
         private readonly Lazy<CurrencySettings> _currencySettings;
         private readonly Lazy<MeasureSettings> _measureSettings;
@@ -83,7 +80,6 @@ namespace SmartStore.Admin.Controllers
             Lazy<ICurrencyService> currencyService,
 			Lazy<IMeasureService> measureService,
             ICustomerService customerService,
-			IUrlRecordService urlRecordService, 
 			Lazy<CommonSettings> commonSettings,
 			Lazy<CurrencySettings> currencySettings,
             Lazy<MeasureSettings> measureSettings,
@@ -103,7 +99,6 @@ namespace SmartStore.Admin.Controllers
             this._currencyService = currencyService;
             this._measureService = measureService;
             this._customerService = customerService;
-            this._urlRecordService = urlRecordService;
 			this._commonSettings = commonSettings;
             this._currencySettings = currencySettings;
             this._measureSettings = measureSettings;
@@ -454,14 +449,15 @@ namespace SmartStore.Admin.Controllers
             model.ServerLocalTime = DateTime.Now;
             model.UtcTime = DateTime.UtcNow;
 			model.HttpHost = _services.WebHelper.ServerVariables("HTTP_HOST");
-            //Environment.GetEnvironmentVariable("USERNAME");
 
 			try
 			{
 				var mbSize = _services.DbContext.SqlQuery<decimal>("Select Sum(size)/128.0 From sysfiles").FirstOrDefault();
-				model.DatabaseSize = Convert.ToDouble(mbSize);
+				model.DatabaseSize = Convert.ToInt64(mbSize * 1024 *1024);
+				
+				model.UsedMemorySize = System.Diagnostics.Process.GetCurrentProcess().PrivateMemorySize64;
 			}
-			catch (Exception) {	}
+			catch {	}
 
 			try
 			{
@@ -471,7 +467,7 @@ namespace SmartStore.Admin.Controllers
 					model.ShrinkDatabaseEnabled = _services.Permissions.Authorize(StandardPermissionProvider.ManageMaintenance) && DataSettings.Current.IsSqlServer;
 				}
 			}
-			catch (Exception) { }
+			catch { }
 
 			try
 			{
@@ -479,7 +475,7 @@ namespace SmartStore.Admin.Controllers
 				var fi = new FileInfo(assembly.Location);
 				model.AppDate = fi.LastWriteTime.ToLocalTime();
 			}
-			catch (Exception) { }
+			catch { }
 
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
@@ -774,7 +770,7 @@ namespace SmartStore.Admin.Controllers
 				if (DataSettings.Current.IsSqlServer)
 				{
 					_services.DbContext.ExecuteSqlCommand("DBCC SHRINKDATABASE(0)", true);
-					NotifySuccess(_localizationService.GetResource("Common.ShrinkDatabaseSuccessful"));
+					NotifySuccess(T("Common.ShrinkDatabaseSuccessful"));
 				}
 			}
 			catch (Exception ex)
@@ -785,7 +781,26 @@ namespace SmartStore.Admin.Controllers
 			return RedirectToReferrer();
 		}
 
-        public ActionResult Maintenance()
+		public async Task<ActionResult> GarbageCollect()
+		{
+			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageMaintenance))
+				return AccessDeniedView();
+
+			try
+			{
+				GC.Collect();
+				await Task.Delay(500);
+				NotifySuccess(T("Admin.System.SystemInfo.GarbageCollectSuccessful"));
+			}
+			catch (Exception ex)
+			{
+				NotifyError(ex);
+			}
+
+			return RedirectToReferrer();
+		}
+
+		public ActionResult Maintenance()
         {
 			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageMaintenance))
                 return AccessDeniedView();
@@ -812,6 +827,9 @@ namespace SmartStore.Admin.Controllers
                 return AccessDeniedView();
 
 			_imageCache.Value.DeleteCachedImages();
+
+			// get rid of cached image metadata
+			_cache("static").Clear();
 
             return RedirectToAction("Maintenance");
         }
@@ -977,80 +995,6 @@ namespace SmartStore.Admin.Controllers
 				return Redirect(previousUrl);
 
             return RedirectToAction("Index", "Home");
-        }
-
-        #endregion
-
-        #region Search engine friendly names
-
-        public ActionResult SeNames()
-        {
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageMaintenance))
-                return AccessDeniedView();
-
-            var model = new UrlRecordListModel();
-            return View(model);
-        }
-
-        [HttpPost, GridAction(EnableCustomBinding = true)]
-        public ActionResult SeNames(GridCommand command, UrlRecordListModel model)
-        {
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageMaintenance))
-                return AccessDeniedView();
-
-            var urlRecords = _urlRecordService.GetAllUrlRecords(model.SeName, command.Page - 1, command.PageSize);
-            var gridModel = new GridModel<UrlRecordModel>
-            {
-                Data = urlRecords.Select(x =>
-                {
-                    string languageName;
-                    if (x.LanguageId == 0)
-                    {
-                        languageName = _localizationService.GetResource("Admin.System.SeNames.Language.Standard");
-                    }
-                    else
-                    {
-                        var language = _languageService.GetLanguageById(x.LanguageId);
-                        languageName = language != null ? language.Name : "Unknown";
-                    }
-                    return new UrlRecordModel()
-                    {
-                        Id = x.Id,
-                        Name = x.Slug,
-                        EntityId = x.EntityId,
-                        EntityName = x.EntityName,
-                        IsActive = x.IsActive,
-                        Language = languageName,
-                    };
-                }),
-                Total = urlRecords.TotalCount
-            };
-            return new JsonResult
-            {
-                Data = gridModel
-            };
-        }
-
-        [HttpPost]
-        public ActionResult DeleteSelectedSeNames(ICollection<int> selectedIds)
-        {
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageMaintenance))
-                return AccessDeniedView();
-
-            if (selectedIds != null)
-            {
-                var urlRecords = new List<UrlRecord>();
-                foreach (var id in selectedIds)
-                {
-                    var urlRecord = _urlRecordService.GetUrlRecordById(id);
-                    if (urlRecord != null)
-                        urlRecords.Add(urlRecord);
-                }
-                foreach (var urlRecord in urlRecords)
-                    _urlRecordService.DeleteUrlRecord(urlRecord);
-            }
-
-            return Json(new { Result = true });
         }
 
         #endregion

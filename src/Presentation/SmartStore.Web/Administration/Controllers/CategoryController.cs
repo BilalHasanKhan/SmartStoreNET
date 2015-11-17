@@ -13,7 +13,7 @@ using SmartStore.Core.Logging;
 using SmartStore.Services.Catalog;
 using SmartStore.Services.Common;
 using SmartStore.Services.Customers;
-using SmartStore.Services.DataExchange.ExportProvider;
+using SmartStore.Services.DataExchange.Providers;
 using SmartStore.Services.Discounts;
 using SmartStore.Services.Filter;
 using SmartStore.Services.Helpers;
@@ -27,6 +27,7 @@ using SmartStore.Web.Framework.Controllers;
 using SmartStore.Web.Framework.Mvc;
 using Telerik.Web.Mvc;
 using Telerik.Web.Mvc.UI;
+using SmartStore.Collections;
 
 namespace SmartStore.Admin.Controllers
 {
@@ -759,7 +760,7 @@ namespace SmartStore.Admin.Controllers
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCatalog))
                 return AccessDeniedView();
 
-			return Export(ExportCategoryXmlProvider.SystemName, null);
+			return Export(CategoryXmlExportProvider.SystemName, null);
         }
 
         #endregion

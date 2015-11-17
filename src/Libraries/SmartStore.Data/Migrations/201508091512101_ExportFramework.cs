@@ -112,10 +112,6 @@ namespace SmartStore.Data.Migrations
 			builder.AddOrUpdate("Admin.Validation.EmailAddress", "Please enter a valid email address", "Bitte geben Sie eine gültige E-Mail Adresse ein");
 
 
-			builder.AddOrUpdate("Admin.DataExchange.Export.ProviderSystemName.Validate",
-				"There were no export provider found for system name \"{0}\". A provider is mandatory for an export profile.",
-				"Es wurde kein Export-Provider mit dem Systemnamen \"{0}\" gefunden. Ein Provider ist für ein Exportprofil zwingend erforderlich.");
-
 			builder.AddOrUpdate("Admin.DataExchange.Export.NoProfiles",
 				"There were no export profiles found.",
 				"Es wurden keine Exportprofile gefunden.");
@@ -493,13 +489,13 @@ namespace SmartStore.Data.Migrations
 			builder.AddOrUpdate("Admin.DataExchange.Export.Deployment.EmailSubject",
 				"Email subject",
 				"E-Mail Betreff",
-				"Specifies the subject of the data should be sent.",
+				"Specifies the subject of the email.",
 				"Legt den Betreff der verschickten Daten fest.");
 
 			builder.AddOrUpdate("Admin.DataExchange.Export.Deployment.EmailAccountId",
 				"Email account",
 				"E-Mail Konto",
-				"Specifies the email account through which the data should be sent.",
+				"Specifies the email account used to sent the data.",
 				"Legt das E-Mail Konto fest, über welches die Daten verschickt werden sollen.");
 		}
     }

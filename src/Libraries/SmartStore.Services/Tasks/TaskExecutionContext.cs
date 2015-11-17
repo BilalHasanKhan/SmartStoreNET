@@ -21,6 +21,7 @@ namespace SmartStore.Services.Tasks
 		{
 			this._componentContext = componentContext;
 			this._originalTask = originalTask;
+			this.Parameters = new Dictionary<string, string>();
 		}
 
 		public T Resolve<T>(object key = null) where T : class
@@ -44,6 +45,23 @@ namespace SmartStore.Services.Tasks
         public CancellationToken CancellationToken { get; internal set; }
 
         public ScheduleTask ScheduleTask { get; set; }
+
+		public IDictionary<string, string> Parameters { get; set; }
+
+		/// <summary>
+		/// Persists a task's progress information to the database
+		/// </summary>
+		/// <param name="value">Progress value (numerator)</param>
+		/// <param name="maximum">Progress maximum (denominator)</param>
+		/// <param name="message">Progress message. Can be <c>null</c>.</param>
+		/// <param name="immediately">if <c>true</c>, saves the updated task entity immediately, or lazily with the next database commit otherwise.</param>
+		public void SetProgress(int value, int maximum, string message, bool immediately = false)
+		{
+			float fraction = (float)value / (float)Math.Max(maximum, 1f);
+			int percentage = (int)Math.Round(fraction * 100f, 0);
+
+			SetProgress(Math.Min(Math.Max(percentage, 0), 100), message, immediately);
+		}
 
 		/// <summary>
 		/// Persists a task's progress information to the database
@@ -74,21 +92,6 @@ namespace SmartStore.Services.Tasks
 				}
 				catch { }
 			}
-		}
-
-		/// <summary>
-		/// Persists a task's progress information to the database
-		/// </summary>
-		/// <param name="numerator">Progress numerator</param>
-		/// <param name="denominator">Progress denominator</param>
-		/// <param name="message">Progress message. Can be <c>null</c>.</param>
-		/// <param name="immediately">if <c>true</c>, saves the updated task entity immediately, or lazily with the next database commit otherwise.</param>
-		public void SetProgress(int numerator, int denominator, string message, bool immediately = false)
-		{
-			float fraction = (float)numerator / (float)Math.Max(denominator, 1f);
-			int percentage = (int)Math.Round(fraction * 100f, 0);
-
-			SetProgress(Math.Min(Math.Max(percentage, 0), 100), message, immediately);
 		}
 	}
 }

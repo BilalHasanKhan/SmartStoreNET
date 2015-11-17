@@ -730,18 +730,18 @@ namespace SmartStore.Services.Messages
             tokens.Add(new Token("Order.CustomerFullName", string.Format("{0} {1}", order.BillingAddress.FirstName, order.BillingAddress.LastName)));
             tokens.Add(new Token("Order.CustomerEmail", order.BillingAddress.Email));
 
-            tokens.Add(new Token("Order.BillingFirstName", order.BillingAddress.FirstName));
-            tokens.Add(new Token("Order.BillingLastName", order.BillingAddress.LastName));
-            tokens.Add(new Token("Order.BillingPhoneNumber", order.BillingAddress.PhoneNumber));
-            tokens.Add(new Token("Order.BillingEmail", order.BillingAddress.Email));
-            tokens.Add(new Token("Order.BillingFaxNumber", order.BillingAddress.FaxNumber));
-            tokens.Add(new Token("Order.BillingCompany", order.BillingAddress.Company));
-            tokens.Add(new Token("Order.BillingAddress1", order.BillingAddress.Address1));
-            tokens.Add(new Token("Order.BillingAddress2", order.BillingAddress.Address2));
-            tokens.Add(new Token("Order.BillingCity", order.BillingAddress.City));
-            tokens.Add(new Token("Order.BillingStateProvince", order.BillingAddress.StateProvince != null ? order.BillingAddress.StateProvince.GetLocalized(x => x.Name) : ""));
-            tokens.Add(new Token("Order.BillingZipPostalCode", order.BillingAddress.ZipPostalCode));
-            tokens.Add(new Token("Order.BillingCountry", order.BillingAddress.Country != null ? order.BillingAddress.Country.GetLocalized(x => x.Name) : ""));
+			tokens.Add(new Token("Order.BillingFirstName", order.BillingAddress.FirstName));
+			tokens.Add(new Token("Order.BillingLastName", order.BillingAddress.LastName));
+			tokens.Add(new Token("Order.BillingPhoneNumber", order.BillingAddress.PhoneNumber));
+			tokens.Add(new Token("Order.BillingEmail", order.BillingAddress.Email));
+			tokens.Add(new Token("Order.BillingFaxNumber", order.BillingAddress.FaxNumber));
+			tokens.Add(new Token("Order.BillingCompany", order.BillingAddress.Company));
+			tokens.Add(new Token("Order.BillingAddress1", order.BillingAddress.Address1));
+			tokens.Add(new Token("Order.BillingAddress2", order.BillingAddress.Address2));
+			tokens.Add(new Token("Order.BillingCity", order.BillingAddress.City));
+			tokens.Add(new Token("Order.BillingStateProvince", order.BillingAddress.StateProvince != null ? order.BillingAddress.StateProvince.GetLocalized(x => x.Name) : ""));
+			tokens.Add(new Token("Order.BillingZipPostalCode", order.BillingAddress.ZipPostalCode));
+			tokens.Add(new Token("Order.BillingCountry", order.BillingAddress.Country != null ? order.BillingAddress.Country.GetLocalized(x => x.Name) : ""));
 
             tokens.Add(new Token("Order.ShippingMethod", order.ShippingMethod));
             tokens.Add(new Token("Order.ShippingFirstName", order.ShippingAddress != null ? order.ShippingAddress.FirstName : ""));
