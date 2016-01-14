@@ -1,50 +1,55 @@
-﻿using SmartStore.Core.Domain;
-using SmartStore.Core.Plugins;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
+using SmartStore.Core.Domain;
+using SmartStore.Core.Domain.Catalog;
+using SmartStore.Core.Domain.DataExchange;
+using SmartStore.Core.Plugins;
 
-namespace SmartStore.Services.DataExchange
+namespace SmartStore.Services.DataExchange.Export
 {
-	public delegate void ProgressSetter(int value, int maximum, string message);
-
 	public interface IDataExporter
 	{
 		DataExportResult Export(DataExportRequest request, CancellationToken cancellationToken);
 
-		// Handle model conversion for grid in backend's controller
-		IList<dynamic> Preview(DataExportRequest request);
+		IList<dynamic> Preview(DataExportRequest request, int pageIndex, int? totalRecords = null);
 
-		// useful for decision making whether export should
-		// be processed sync or async
-		long GetDataCount(DataExportRequest request);
+		int GetDataCount(DataExportRequest request);
 	}
+
 
 	public class DataExportRequest
 	{
-		private readonly static ProgressSetter _voidProgressSetter = DataExportRequest.SetProgress;
+		private readonly static ProgressValueSetter _voidProgressValueSetter = DataExportRequest.SetProgress;
 
-		public DataExportRequest(ExportProfile profile)
+		public DataExportRequest(ExportProfile profile, Provider<IExportProvider> provider)
 		{
 			Guard.ArgumentNotNull(() => profile);
+			Guard.ArgumentNotNull(() => provider);
 
-			CustomData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-			ProgressSetter = _voidProgressSetter;
 			Profile = profile;
-        }
+			Provider = provider;
+			ProgressValueSetter = _voidProgressValueSetter;
+
+			EntitiesToExport = new List<int>();
+			CustomData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+		}
 
 		public ExportProfile Profile { get; private set; }
 
-		public Provider<IExportProvider> Provider { get; set; }
+		public Provider<IExportProvider> Provider { get; private set; }
 
-		public IEnumerable<int> EntitiesToExport { get; set; }
+		public ProgressValueSetter ProgressValueSetter { get; set; }
 
-		public ProgressSetter ProgressSetter { get; set; }
+		public int CustomerId { get; set; }
+		public bool HasPermission { get; set; }
+
+		public IList<int> EntitiesToExport { get; set; }
 
 		public IDictionary<string, object> CustomData { get; private set; }
+
+		public IQueryable<Product> ProductQuery { get; set; }
 
 
 		private static void SetProgress(int val, int max, string msg)

@@ -1,9 +1,10 @@
-# Release Notes
+﻿# Release Notes
 
 ## SmartStore.NET 2.5
 
 ### New Features
-* #701 Implement new export framework
+* New export and import framework
+* Import of customer and category data
 * #141 Payment and shipping methods by customer roles
 * #67 Restrict payment methods to countries
 * #94 Restrict payment methods to shipping methods
@@ -28,6 +29,16 @@
 * #722 System > SEO Names: Implement editing of an UrlRecord
 * Admin > System > System Info shows used application memory (RAM)
 * Added option to make VATIN mandatory during customer registration
+* #840 Activity log: Have option to exclude search engine activity
+* #841 Activity log for deleting an order
+* More settings to control creation of SEO names
+* GMC feed: Supporting fields multipack, bundle, adult, energy efficiency class and custom label (0 to 4)
+* #760 Setting to set a customer role for new registered users
+* #800 Multi-store: Option to display all orders of all stores for customer in frontend
+* #457 Added option to hide the default image for categories and products
+* #451 Add message token for product shipping surcharge
+* #436 Make %Order.Product(s)% token to link the product detail page and a add product thumbnail
+* #339 Meta robots setting for page indexing of search engines
 
 ### Improvements
 * (Perf) Implemented static caches for URL aliases and localized properties. Increases app startup and request speed by up to 30%.
@@ -51,13 +62,19 @@
 * #62 free shipping info on product detail page
 * Display base price in CompactProductBox
 * Automatically redirect to referrer after login
+* #826 Image gallery: the viewport height was fixed to 300 px, but now respects MediaSettings > ImageSize.
 * #249 Make UI editor for 'SeoSettings.ExtraRobotsDisallows'
 * Debitoor: Customer VAT number not transmitted anymore because it appears on the Debitoor invoice.
 * #778 Web-API: Increase MaxExpansionDepth for using expand pathes
 * #767 Remove assignments to a grouped product if the grouped product is deleted
 * #773 Reduce number of guest records created by search engine requests
 * #791 Preselected attributes or attribute combinations should always be appended as querystring to product page links
-* Simplified managing of SEO names
+* Simplified handling of SEO names
+* URLs are not converted to lower case anymore
+* Product grid sortable by name, price and created on
+* #26 Display company or name in order list
+* Added inline editing of country grid
+* #790 Improved language editing
 
 ### Bugfixes
 * #523 Redirecting to payment provider performed by core instead of plugin
@@ -72,6 +89,11 @@
 * #776 Preview: Manufacturer and Product in Multi Store
 * #755 Some methods still loading all products in one go
 * #796 Selected specification in product filter mask is displayed with default language (not localized)
+* #805 Product filter is reset if 'product sorting' or 'view mode' or 'amount of displayed products per page' is changed
+* Hide link to a topic page if it is limited to stores
+* #829 Activity log: Searching by customer email out of function
+* Product import: Store mappings were not applied when inserting new records
+* Faulty permission handling in ajax grid actions (no message, infinite loading icon)
 
 
 ## SmartStore.NET 2.2.2

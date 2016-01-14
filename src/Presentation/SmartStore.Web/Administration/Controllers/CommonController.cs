@@ -28,6 +28,7 @@ using SmartStore.Core.Plugins;
 using SmartStore.Services;
 using SmartStore.Services.Common;
 using SmartStore.Services.Customers;
+using SmartStore.Services.DataExchange.Import;
 using SmartStore.Services.Directory;
 using SmartStore.Services.Helpers;
 using SmartStore.Services.Localization;
@@ -38,6 +39,7 @@ using SmartStore.Services.Shipping;
 using SmartStore.Utilities;
 using SmartStore.Web.Framework;
 using SmartStore.Web.Framework.Controllers;
+using SmartStore.Web.Framework.Filters;
 using SmartStore.Web.Framework.Security;
 using SmartStore.Web.Framework.UI;
 using Telerik.Web.Mvc;
@@ -64,7 +66,8 @@ namespace SmartStore.Admin.Controllers
         private readonly Lazy<SecuritySettings> _securitySettings;
 		private readonly Lazy<IMenuPublisher> _menuPublisher;
         private readonly Lazy<IPluginFinder> _pluginFinder;
-        private readonly IGenericAttributeService _genericAttributeService;
+		private readonly Lazy<IImportProfileService> _importProfileService;
+		private readonly IGenericAttributeService _genericAttributeService;
 		private readonly ICommonServices _services;
 		private readonly Func<string, ICacheManager> _cache;
 
@@ -90,7 +93,8 @@ namespace SmartStore.Admin.Controllers
 			Lazy<SecuritySettings> securitySettings,
 			Lazy<IMenuPublisher> menuPublisher,
             Lazy<IPluginFinder> pluginFinder,
-            IGenericAttributeService genericAttributeService,
+			Lazy<IImportProfileService> importProfileService,
+			IGenericAttributeService genericAttributeService,
 			ICommonServices services,
 			Func<string, ICacheManager> cache)
         {
@@ -109,6 +113,7 @@ namespace SmartStore.Admin.Controllers
             this._securitySettings = securitySettings;
             this._menuPublisher = menuPublisher;
 			this._pluginFinder = pluginFinder;
+			this._importProfileService = importProfileService;
             this._genericAttributeService = genericAttributeService;
 			this._services = services;
 			this._cache = cache;
@@ -875,7 +880,7 @@ namespace SmartStore.Admin.Controllers
 			{
 				appPath + @"Content\files\exportimport\",
 				appPath + @"Exchange\",
-				appPath + @"App_Data\_temp\Profile\Export\"
+				appPath + @"App_Data\ExportProfiles\"
 			};
 
 			foreach (var path in paths)
@@ -919,7 +924,23 @@ namespace SmartStore.Admin.Controllers
 				}
 			}
 
-            return View(model);
+			// clear unreferenced profile folders
+			var importProfileFolders = _importProfileService.Value.GetImportProfiles()
+				.Select(x => x.FolderName)
+				.ToList();
+
+			var infoImportProfiles = new DirectoryInfo(CommonHelper.MapPath("~/App_Data/ImportProfiles"));
+
+			foreach (var infoSubFolder in infoImportProfiles.GetDirectories())
+			{
+				if (!importProfileFolders.Contains(infoSubFolder.Name))
+				{
+					FileSystemHelper.ClearDirectory(infoSubFolder.FullName, true);
+					++model.DeleteExportedFiles.NumberOfDeletedFolders;
+				}
+			}
+
+			return View(model);
         }
 
         [HttpPost, ActionName("Maintenance"), ValidateInput(false)]
@@ -1013,35 +1034,43 @@ namespace SmartStore.Admin.Controllers
         [HttpPost, GridAction(EnableCustomBinding = true)]
         public ActionResult GenericAttributesSelect(string entityName, int entityId, GridCommand command)
         {
-            if (!_services.Permissions.Authorize(StandardPermissionProvider.AccessAdminPanel))
-                return AccessDeniedView();
+			var model = new GridModel<GenericAttributeModel>();
 
 			var storeId = _services.StoreContext.CurrentStore.Id;
-            ViewBag.StoreId = storeId;
+			ViewBag.StoreId = storeId;
 
-            var model = new List<GenericAttributeModel>();
-            if (entityName.HasValue() && entityId > 0)
-            {
-                var attributes = _genericAttributeService.GetAttributesForEntity(entityId, entityName);
-                var query = from attr in attributes
-                            where attr.StoreId == storeId || attr.StoreId == 0
-                            select new GenericAttributeModel
-                            {
-                                Id = attr.Id,
-                                EntityId = attr.EntityId,
-                                EntityName = attr.KeyGroup,
-                                Key = attr.Key,
-                                Value = attr.Value
-                            };
-                model.AddRange(query);
-            }
+			if (_services.Permissions.Authorize(StandardPermissionProvider.AccessAdminPanel))
+			{
+				if (entityName.HasValue() && entityId > 0)
+				{
+					var attributes = _genericAttributeService.GetAttributesForEntity(entityId, entityName);
 
+					model.Data = attributes
+						.Where(x => x.StoreId == storeId || x.StoreId == 0)
+						.Select(x => new GenericAttributeModel
+						{
+							Id = x.Id,
+							EntityId = x.EntityId,
+							EntityName = x.KeyGroup,
+							Key = x.Key,
+							Value = x.Value
+						})
+						.ToList();
 
-            var result = new GridModel<GenericAttributeModel>
-            {
-                Data = model,
-                Total = model.Count
-            };
+					model.Total = model.Data.Count();
+				}
+				else
+				{
+					model.Data = Enumerable.Empty<GenericAttributeModel>();
+				}
+			}
+			else
+			{
+				model.Data = Enumerable.Empty<GenericAttributeModel>();
+
+				NotifyAccessDenied();
+			}
+
             return new JsonResult
             {
                 Data = model
@@ -1051,38 +1080,36 @@ namespace SmartStore.Admin.Controllers
         [GridAction(EnableCustomBinding = true)]
         public ActionResult GenericAttributeAdd(GenericAttributeModel model, GridCommand command)
         {
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.AccessAdminPanel))
-                return AccessDeniedView();
+			if (_services.Permissions.Authorize(StandardPermissionProvider.AccessAdminPanel))
+			{
+				model.Key = model.Key.TrimSafe();
+				model.Value = model.Value.TrimSafe();
 
-            model.Key = model.Key.TrimSafe();
-            model.Value = model.Value.TrimSafe();
+				if (!ModelState.IsValid)
+				{
+					var modelStateErrorMessages = this.ModelState.Values.SelectMany(x => x.Errors).Select(x => x.ErrorMessage);
+					return Content(modelStateErrorMessages.FirstOrDefault());
+				}
 
-            if (!ModelState.IsValid)
-            {
-                // display the first model error
-                var modelStateErrorMessages = this.ModelState.Values.SelectMany(x => x.Errors).Select(x => x.ErrorMessage);
-                return Content(modelStateErrorMessages.FirstOrDefault());
-            }
+				var storeId = _services.StoreContext.CurrentStore.Id;
 
-			var storeId = _services.StoreContext.CurrentStore.Id;
-
-            var attr = _genericAttributeService.GetAttribute<string>(model.EntityName, model.EntityId, model.Key, storeId);
-            if (attr == null)
-            {
-                var ga = new GenericAttribute
-                {
-                    StoreId = storeId,
-                    KeyGroup = model.EntityName,
-                    EntityId = model.EntityId,
-                    Key = model.Key,
-                    Value = model.Value
-                };
-                _genericAttributeService.InsertAttribute(ga);
-            }
-            else
-            {
-                return Content(string.Format(_localizationService.GetResource("Admin.Common.GenericAttributes.NameAlreadyExists"), model.Key));
-            }
+				var attr = _genericAttributeService.GetAttribute<string>(model.EntityName, model.EntityId, model.Key, storeId);
+				if (attr == null)
+				{
+					_genericAttributeService.InsertAttribute(new GenericAttribute
+					{
+						StoreId = storeId,
+						KeyGroup = model.EntityName,
+						EntityId = model.EntityId,
+						Key = model.Key,
+						Value = model.Value
+					});
+				}
+				else
+				{
+					return Content(T("Admin.Common.GenericAttributes.NameAlreadyExists", model.Key));
+				}
+			}
 
             return GenericAttributesSelect(model.EntityName, model.EntityId, command);
         }
@@ -1090,38 +1117,38 @@ namespace SmartStore.Admin.Controllers
         [GridAction(EnableCustomBinding = true)]
         public ActionResult GenericAttributeUpdate(GenericAttributeModel model, GridCommand command)
         {
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.AccessAdminPanel))
-                return AccessDeniedView();
+			if (_services.Permissions.Authorize(StandardPermissionProvider.AccessAdminPanel))
+			{
+				model.Key = model.Key.TrimSafe();
+				model.Value = model.Value.TrimSafe();
 
-            model.Key = model.Key.TrimSafe();
-            model.Value = model.Value.TrimSafe();
+				if (!ModelState.IsValid)
+				{
+					var modelStateErrorMessages = this.ModelState.Values.SelectMany(x => x.Errors).Select(x => x.ErrorMessage);
+					return Content(modelStateErrorMessages.FirstOrDefault());
+				}
 
-            if (!ModelState.IsValid)
-            {
-                // display the first model error
-                var modelStateErrorMessages = this.ModelState.Values.SelectMany(x => x.Errors).Select(x => x.ErrorMessage);
-                return Content(modelStateErrorMessages.FirstOrDefault());
-            }
+				var storeId = _services.StoreContext.CurrentStore.Id;
 
-			var storeId = _services.StoreContext.CurrentStore.Id;
+				var attr = _genericAttributeService.GetAttributeById(model.Id);
+				// if the key changed, ensure it isn't being used by another attribute
+				if (!attr.Key.IsCaseInsensitiveEqual(model.Key))
+				{
+					var attr2 = _genericAttributeService.GetAttributesForEntity(model.EntityId, model.EntityName)
+						.Where(x => x.StoreId == storeId && x.Key.Equals(model.Key, StringComparison.InvariantCultureIgnoreCase))
+						.FirstOrDefault();
 
-            var attr = _genericAttributeService.GetAttributeById(model.Id);
-            // if the key changed, ensure it isn't being used by another attribute
-            if (!attr.Key.IsCaseInsensitiveEqual(model.Key))
-            {
-                var attr2 = _genericAttributeService.GetAttributesForEntity(model.EntityId, model.EntityName)
-                    .Where(x => x.StoreId == storeId && x.Key.Equals(model.Key, StringComparison.InvariantCultureIgnoreCase))
-                    .FirstOrDefault();
-                if (attr2 != null && attr2.Id != attr.Id)
-                {
-                    return Content(string.Format(_localizationService.GetResource("Admin.Common.GenericAttributes.NameAlreadyExists"), model.Key));
-                }
-            }
+					if (attr2 != null && attr2.Id != attr.Id)
+					{
+						return Content(T("Admin.Common.GenericAttributes.NameAlreadyExists", model.Key));
+					}
+				}
 
-            attr.Key = model.Key;
-            attr.Value = model.Value;
+				attr.Key = model.Key;
+				attr.Value = model.Value;
 
-            _genericAttributeService.UpdateAttribute(attr);
+				_genericAttributeService.UpdateAttribute(attr);
+			}
 
             return GenericAttributesSelect(model.EntityName, model.EntityId, command);
         }
@@ -1129,17 +1156,12 @@ namespace SmartStore.Admin.Controllers
         [GridAction(EnableCustomBinding = true)]
         public ActionResult GenericAttributeDelete(int id, GridCommand command)
         {
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.AccessAdminPanel))
-                return AccessDeniedView();
-
             var attr = _genericAttributeService.GetAttributeById(id);
 
-            if (attr == null)
-            {
-                throw new System.Web.HttpException(404, "No resource found with the specified id");
-            }
-
-            _genericAttributeService.DeleteAttribute(attr);
+			if (_services.Permissions.Authorize(StandardPermissionProvider.AccessAdminPanel))
+			{
+				_genericAttributeService.DeleteAttribute(attr);
+			}
 
             return GenericAttributesSelect(attr.KeyGroup, attr.EntityId, command);
         }

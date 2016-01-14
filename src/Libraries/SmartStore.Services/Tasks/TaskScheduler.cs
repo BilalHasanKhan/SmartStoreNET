@@ -113,7 +113,7 @@ namespace SmartStore.Services.Tasks
 				query = qs.ToString();
 			}
 
-			CallEndpoint(_baseUrl + "/Execute/{0}{1}".FormatInvariant(scheduleTaskId, query));
+			CallEndpoint("{0}/Execute/{1}{2}".FormatInvariant(_baseUrl, scheduleTaskId, query));
         }
 
 		private void Elapsed(object sender, System.Timers.ElapsedEventArgs e)
@@ -174,7 +174,14 @@ namespace SmartStore.Services.Tasks
 				else
 				{
 					_errCount = 0;
-					t.Result.Dispose();
+					var response = t.Result;
+
+					//using (var logger = new TraceLogger())
+					//{
+					//	logger.Debug("TaskScheduler Sweep called successfully: {0}".FormatCurrent(response.GetResponseStream().AsString()));
+					//}
+
+					response.Dispose();
 				}
             });
         }

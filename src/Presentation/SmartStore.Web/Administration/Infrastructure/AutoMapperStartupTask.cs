@@ -129,7 +129,9 @@ namespace SmartStore.Admin.Infrastructure
                 .ForMember(dest => dest.Country, mo => mo.Ignore());
             //language
             Mapper.CreateMap<Language, LanguageModel>()
-                .ForMember(dest => dest.FlagFileNames, mo => mo.Ignore())
+                .ForMember(dest => dest.AvailableFlags, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailableCultures, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailableTwoLetterLanguageCodes, mo => mo.Ignore())
 				.ForMember(dest => dest.AvailableStores, mo => mo.Ignore())
 				.ForMember(dest => dest.SelectedStoreIds, mo => mo.Ignore());
             Mapper.CreateMap<LanguageModel, Language>()
@@ -315,8 +317,10 @@ namespace SmartStore.Admin.Infrastructure
             Mapper.CreateMap<ActivityLog, ActivityLogModel>()
                 .ForMember(dest => dest.ActivityLogTypeName, mo => mo.MapFrom(src => src.ActivityLogType.Name))
                 .ForMember(dest => dest.CustomerEmail, mo => mo.MapFrom(src => src.Customer.Email))
-                .ForMember(dest => dest.CreatedOn, mo => mo.Ignore());
-            //currencies
+                .ForMember(dest => dest.CreatedOn, mo => mo.Ignore())
+				.ForMember(dest => dest.IsSystemAccount, mo => mo.Ignore())
+				.ForMember(dest => dest.SystemAccountName, mo => mo.Ignore());
+			//currencies
 			Mapper.CreateMap<Currency, CurrencyModel>()
 				.ForMember(dest => dest.CreatedOn, mo => mo.Ignore())
 				.ForMember(dest => dest.IsPrimaryExchangeRateCurrency, mo => mo.Ignore())
@@ -346,8 +350,7 @@ namespace SmartStore.Admin.Infrastructure
             Mapper.CreateMap<ContentSliderSettings, ContentSliderSettingsModel>()
                 .ForMember(dest => dest.Id, mo => mo.Ignore())
 				.ForMember(dest => dest.AvailableStores, mo => mo.Ignore())
-				.ForMember(dest => dest.SearchStoreId, mo => mo.Ignore())
-				.ForMember(dest => dest.StoreCount, mo => mo.Ignore());
+				.ForMember(dest => dest.SearchStoreId, mo => mo.Ignore());
             Mapper.CreateMap<ContentSliderSettingsModel, ContentSliderSettings>();
 
 			Mapper.CreateMap<ContentSliderSlideSettings, ContentSliderSlideModel>()
@@ -393,15 +396,9 @@ namespace SmartStore.Admin.Infrastructure
             //shipping methods
             Mapper.CreateMap<ShippingMethod, ShippingMethodModel>()
                 .ForMember(dest => dest.Locales, mo => mo.Ignore())
-				.ForMember(dest => dest.ExcludedCountryIds, mo => mo.Ignore())
-				.ForMember(dest => dest.AvailableCustomerRoles, mo => mo.Ignore())
-				.ForMember(dest => dest.AvailableCountries, mo => mo.Ignore())
-				.ForMember(dest => dest.AvailableCountryExclusionContextTypes, mo => mo.Ignore())
 				.ForMember(dest => dest.FilterConfigurationUrls, mo => mo.Ignore());
 			Mapper.CreateMap<ShippingMethodModel, ShippingMethod>()
-				.ForMember(dest => dest.RestrictedCountries, mo => mo.Ignore())
-				.ForMember(dest => dest.ExcludedCustomerRoleIds, mo => mo.Ignore())
-				.ForMember(dest => dest.CountryExclusionContextId, mo => mo.Ignore());
+				.ForMember(dest => dest.RestrictedCountries, mo => mo.Ignore());
             //plugins
             Mapper.CreateMap<PluginDescriptor, PluginModel>()
                 .ForMember(dest => dest.ConfigurationUrl, mo => mo.Ignore())
@@ -645,6 +642,7 @@ namespace SmartStore.Admin.Infrastructure
                 .ForMember(dest => dest.GiftCards_Activated_OrderStatuses, mo => mo.Ignore())
                 .ForMember(dest => dest.GiftCards_Deactivated_OrderStatuses, mo => mo.Ignore())
                 .ForMember(dest => dest.PrimaryStoreCurrencyCode, mo => mo.Ignore())
+				.ForMember(dest => dest.StoreCount, mo => mo.Ignore())
                 .ForMember(dest => dest.OrderIdent, mo => mo.Ignore())
 				.ForMember(dest => dest.Locales, mo => mo.Ignore());
             Mapper.CreateMap<OrderSettingsModel, OrderSettings>()

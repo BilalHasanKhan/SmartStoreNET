@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using SmartStore.Core.Domain.DataExchange;
 using SmartStore.Core.Logging;
 
-namespace SmartStore.Services.DataExchange
+namespace SmartStore.Services.DataExchange.Export
 {
 	public interface IExportExecuteContext
 	{
@@ -46,7 +47,23 @@ namespace SmartStore.Services.DataExchange
 		/// <summary>
 		/// Indicates whether and how to abort the export
 		/// </summary>
-		ExportAbortion Abort { get; set; }
+		DataExchangeAbortion Abort { get; set; }
+
+
+		/// <summary>
+		/// Identifier of current data stream. Can be <c>null</c>.
+		/// </summary>
+		string DataStreamId { get; set; }
+
+		/// <summary>
+		/// Stream used to write data to
+		/// </summary>
+		Stream DataStream { get; }
+
+		/// <summary>
+		/// List with extra data streams required by provider
+		/// </summary>
+		List<ExportExtraStreams> ExtraDataStreams { get; set; }
 
 
 		/// <summary>
@@ -55,19 +72,14 @@ namespace SmartStore.Services.DataExchange
 		int MaxFileNameLength { get; }
 
 		/// <summary>
-		/// The path of the export content folder
-		/// </summary>
-		string Folder { get; }
-
-		/// <summary>
 		/// The name of the current export file
 		/// </summary>
 		string FileName { get; }
 
 		/// <summary>
-		/// The path of the current export file
+		/// The path of the export content folder
 		/// </summary>
-		string FilePath { get; }
+		string Folder { get; }
 
 
 		/// <summary>
@@ -111,6 +123,31 @@ namespace SmartStore.Services.DataExchange
 		/// </summary>
 		/// <param name="exc">Exception</param>
 		void RecordException(Exception exc, int entityId);
+
+		/// <summary>
+		/// Allows to set a progress message
+		/// </summary>
+		/// <param name="message">Output message</param>
+		void SetProgress(string message);
+	}
+
+
+	public class ExportExtraStreams
+	{
+		/// <summary>
+		/// Your Id to identify this stream within a list of streams
+		/// </summary>
+		public string Id { get; set; }
+
+		/// <summary>
+		/// Stream used to write data to
+		/// </summary>
+		public Stream DataStream { get; internal set; }
+
+		/// <summary>
+		/// The name of the file to be created
+		/// </summary>
+		public string FileName { get; set; }
 	}
 
 
@@ -118,14 +155,14 @@ namespace SmartStore.Services.DataExchange
 	{
 		private DataExportResult _result;
 		private CancellationToken _cancellation;
-		private ExportAbortion _providerAbort;
+		private DataExchangeAbortion _providerAbort;
 
 		internal ExportExecuteContext(DataExportResult result, CancellationToken cancellation, string folder)
 		{
 			_result = result;
 			_cancellation = cancellation;
 			Folder = folder;
-
+			ExtraDataStreams = new List<ExportExtraStreams>();
 			CustomProperties = new Dictionary<string, object>();
 		}
 
@@ -138,13 +175,14 @@ namespace SmartStore.Services.DataExchange
 		public ExportProjection Projection { get; internal set; }
 
 		public ILogger Log { get; internal set; }
+		public ProgressValueSetter ProgressValueSetter { get; internal set; }
 
-		public ExportAbortion Abort
+		public DataExchangeAbortion Abort
 		{
 			get
 			{
 				if (_cancellation.IsCancellationRequested || IsMaxFailures)
-					return ExportAbortion.Hard;
+					return DataExchangeAbortion.Hard;
 
 				return _providerAbort;
 			}
@@ -159,12 +197,13 @@ namespace SmartStore.Services.DataExchange
 			get { return RecordsFailed > 11; }
 		}
 
-		public int MaxFileNameLength { get; internal set; }
+		public string DataStreamId { get; set; }
+		public Stream DataStream { get; internal set; }
+		public List<ExportExtraStreams> ExtraDataStreams { get; set; }
 
-		public string Folder { get; private set; }
+		public int MaxFileNameLength { get; internal set; }
 		public string FileName { get; internal set; }
-		public string FileExtension { get; internal set; }
-		public string FilePath { get; internal set; }
+		public string Folder { get; private set; }
 
 		public bool HasPublicDeployment { get; internal set; }
 		public string PublicFolderPath { get; internal set; }
@@ -185,6 +224,18 @@ namespace SmartStore.Services.DataExchange
 
 			if (IsMaxFailures)
 				_result.LastError = exc.ToString();
+		}
+
+		public void SetProgress(string message)
+		{
+			if (ProgressValueSetter != null && message.HasValue())
+			{
+				try
+				{
+					ProgressValueSetter.Invoke(0, 0, message);
+				}
+				catch { }
+			}
 		}
 	}
 }

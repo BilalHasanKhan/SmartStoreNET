@@ -23,7 +23,8 @@ using SmartStore.Services.Seo;
 using SmartStore.Services.Stores;
 using SmartStore.Utilities;
 using SmartStore.Web.Framework.Controllers;
-using SmartStore.Web.Framework.Mvc;
+using SmartStore.Web.Framework.Filters;
+using SmartStore.Web.Framework.Modelling;
 using SmartStore.Web.Framework.Security;
 using SmartStore.Web.Framework.UI;
 using SmartStore.Web.Infrastructure.Cache;
@@ -211,7 +212,7 @@ namespace SmartStore.Web.Controllers
                         {
 							PictureId = x.PictureId.GetValueOrDefault(),
 							FullSizeImageUrl = _pictureService.GetPictureUrl(picture),
-							ImageUrl = _pictureService.GetPictureUrl(picture, targetSize: pictureSize),
+							ImageUrl = _pictureService.GetPictureUrl(picture, pictureSize, !_catalogSettings.HideCategoryDefaultPictures),
                             Title = string.Format(T("Media.Category.ImageLinkTitleFormat"), subCatName),
                             AlternateText = string.Format(T("Media.Category.ImageAlternateTextFormat"), subCatName)
                         };
@@ -283,6 +284,7 @@ namespace SmartStore.Web.Controllers
 					products, 
 					prepareColorAttributes: true,
 					prepareManufacturers: command.ViewMode.IsCaseInsensitiveEqual("list")).ToList();
+
                 model.PagingFilteringContext.LoadPagedList(products);
             }
             else
@@ -403,7 +405,7 @@ namespace SmartStore.Web.Controllers
                         {
 							PictureId = x.PictureId.GetValueOrDefault(),
 							FullSizeImageUrl = _pictureService.GetPictureUrl(x.PictureId.GetValueOrDefault()),
-							ImageUrl = _pictureService.GetPictureUrl(x.PictureId.GetValueOrDefault(), pictureSize),
+							ImageUrl = _pictureService.GetPictureUrl(x.PictureId.GetValueOrDefault(), pictureSize, !_catalogSettings.HideCategoryDefaultPictures),
                             Title = string.Format(T("Media.Category.ImageLinkTitleFormat"), catModel.Name),
 							AlternateText = string.Format(T("Media.Category.ImageAlternateTextFormat"), catModel.Name)
                         };

@@ -1,13 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Web.Mvc;
 using FluentValidation.Attributes;
 using SmartStore.Admin.Models.Tasks;
 using SmartStore.Admin.Validators.DataExchange;
 using SmartStore.Core.Domain.DataExchange;
 using SmartStore.Web.Framework;
-using SmartStore.Web.Framework.Mvc;
+using SmartStore.Web.Framework.Modelling;
 
 namespace SmartStore.Admin.Models.DataExchange
 {
@@ -19,9 +18,16 @@ namespace SmartStore.Admin.Models.DataExchange
 		public string UnspecifiedString { get; set; }
 		public bool LogFileExists { get; set; }
 		public bool HasActiveProvider { get; set; }
+		public string[] FileNamePatternDescriptions { get; set; }
 
 		[SmartResourceDisplayName("Admin.DataExchange.Export.Name")]
 		public string Name { get; set; }
+
+		[SmartResourceDisplayName("Admin.DataExchange.Export.SystemName")]
+		public string SystemName { get; set; }
+
+		[SmartResourceDisplayName("Admin.DataExchange.Export.IsSystemProfile")]
+		public bool IsSystemProfile { get; set; }
 
 		[SmartResourceDisplayName("Admin.DataExchange.Export.ProviderSystemName")]
 		public string ProviderSystemName { get; set; }
@@ -43,14 +49,10 @@ namespace SmartStore.Admin.Models.DataExchange
 		public bool IsTaskRunning { get; set; }
 		public bool IsTaskEnabled { get; set; }
 
-		[SmartResourceDisplayName("Admin.DataExchange.Export.LastExecution")]
-		[AllowHtml]
-		public string LastExecution { get; set; }
-
-		[SmartResourceDisplayName("Admin.DataExchange.Export.Offset")]
+		[SmartResourceDisplayName("Admin.Common.RecordsSkip")]
 		public int Offset { get; set; }
 
-		[SmartResourceDisplayName("Admin.DataExchange.Export.Limit")]
+		[SmartResourceDisplayName("Admin.Common.RecordsTake")]
 		public int Limit { get; set; }
 
 		[SmartResourceDisplayName("Admin.DataExchange.Export.BatchSize")]
@@ -75,7 +77,6 @@ namespace SmartStore.Admin.Models.DataExchange
 
 		[SmartResourceDisplayName("Admin.DataExchange.Export.CloneProfile")]
 		public int? CloneProfileId { get; set; }
-		//public List<SelectListItem> AvailableProfiles { get; set; }
 		public List<ProviderSelectItem> AvailableProfiles { get; set; }
 
 		public ProviderModel Provider { get; set; }
@@ -88,13 +89,15 @@ namespace SmartStore.Admin.Models.DataExchange
 
 		public ScheduleTaskModel TaskModel { get; set; }
 
+		public ExportProfileDetailsModel Details { get; set; }
+
 		public class ProviderModel
 		{
 			public string ConfigPartialViewName { get; set; }
 			public Type ConfigDataType { get; set; }
 			public object ConfigData { get; set; }
 
-			public ExportFeatures[] Supporting { get; set; }
+			public ExportFeatures Feature { get; set; }
 
 			[SmartResourceDisplayName("Common.Image")]
 			public string ThumbnailUrl { get; set; }
@@ -143,6 +146,34 @@ namespace SmartStore.Admin.Models.DataExchange
 			public string FriendlyName { get; set; }
 			public string ImageUrl { get; set; }
 			public string Description { get; set; }
+		}
+	}
+
+
+	public partial class ExportProfileDetailsModel : EntityModelBase
+	{
+		[SmartResourceDisplayName("Admin.DataExchange.Export.ExportFiles")]
+		public List<string> ExportFiles { get; set; }
+
+		public string ZipPath { get; set; }
+
+		[SmartResourceDisplayName("Admin.DataExchange.Export.ExportFiles")]
+		public int ExportFileCount
+		{
+			get
+			{
+				return (ExportFiles.Count + (ZipPath.HasValue() ? 1 : 0));
+			}
+		}
+
+		public List<PublicFile> PublicFiles { get; set;	}
+
+		public class PublicFile
+		{
+			public int StoreId { get; set; }
+			public string StoreName { get; set; }
+			public string FileName { get; set; }
+			public string FileUrl { get; set; }
 		}
 	}
 }

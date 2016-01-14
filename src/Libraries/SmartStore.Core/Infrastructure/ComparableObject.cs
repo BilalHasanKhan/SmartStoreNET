@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.ComponentModel;
-using SmartStore.Utilities.Reflection;
 using SmartStore.Utilities;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
+using SmartStore.ComponentModel;
 
 namespace SmartStore
 {
@@ -37,11 +37,13 @@ namespace SmartStore
         /// if at all, in an object's lifetime; it's important that properties are carefully
         /// selected which truly represent the signature of an object.
         /// </summary>
+        [SuppressMessage("ReSharper", "BaseObjectGetHashCodeCallInGetHashCode")]
+        [SuppressMessage("ReSharper", "PossibleMultipleEnumeration")]
         public override int GetHashCode()
         {
             unchecked
             {
-                var signatureProperties = GetSignatureProperties();
+                var signatureProperties = GetSignatureProperties().ToArray();
                 Type t = this.GetType();
 
 				var combiner = HashCodeCombiner.Start();
@@ -53,13 +55,13 @@ namespace SmartStore
 
                 foreach (var prop in signatureProperties)
                 {
-                    object value = prop.GetValue(this);
+                    var value = prop.GetValue(this);
 
                     if (value != null)
 						combiner.Add(value.GetHashCode());
                 }
 
-                if (signatureProperties.Any())
+                if (signatureProperties.Length > 0)
                     return combiner.CombinedHash;
 
                 // If no properties were flagged as being part of the signature of the object,

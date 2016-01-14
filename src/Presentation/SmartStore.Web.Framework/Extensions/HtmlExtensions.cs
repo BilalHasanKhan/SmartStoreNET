@@ -14,11 +14,11 @@ using SmartStore.Core;
 using SmartStore.Core.Infrastructure;
 using SmartStore.Services.Localization;
 using SmartStore.Web.Framework.Localization;
-using SmartStore.Web.Framework.Mvc;
 using SmartStore.Web.Framework.UI;
 using SmartStore.Web.Framework.Settings;
 using SmartStore.Utilities;
 using SmartStore.Core.Domain.Catalog;
+using SmartStore.Web.Framework.Modelling;
 
 namespace SmartStore.Web.Framework
 {
@@ -311,13 +311,13 @@ namespace SmartStore.Web.Framework
                 yearLocale = "Year";
             }
 
-            days.AppendFormat("<option>{0}</option>", dayLocale);
+            days.AppendFormat("<option value=''>{0}</option>", dayLocale);
             for (int i = 1; i <= 31; i++)
                 days.AppendFormat("<option value='{0}'{1}>{0}</option>", i,
                     (selectedDay.HasValue && selectedDay.Value == i) ? " selected=\"selected\"" : null);
 
 
-            months.AppendFormat("<option>{0}</option>", monthLocale);
+            months.AppendFormat("<option value=''>{0}</option>", monthLocale);
             for (int i = 1; i <= 12; i++)
             {
                 months.AppendFormat("<option value='{0}'{1}>{2}</option>",
@@ -327,7 +327,7 @@ namespace SmartStore.Web.Framework
             }
 
 
-            years.AppendFormat("<option>{0}</option>", yearLocale);
+            years.AppendFormat("<option value=''>{0}</option>", yearLocale);
 
             if (beginYear == null)
                 beginYear = DateTime.UtcNow.Year - 90;

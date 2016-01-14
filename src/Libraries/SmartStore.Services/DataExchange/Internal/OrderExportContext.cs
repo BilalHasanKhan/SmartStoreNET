@@ -7,7 +7,7 @@ using SmartStore.Core.Domain.Customers;
 using SmartStore.Core.Domain.Orders;
 using SmartStore.Core.Domain.Shipping;
 
-namespace SmartStore.Services.DataExchange.Internal
+namespace SmartStore.Services.DataExchange.Export.Internal
 {
 	internal class OrderExportContext
 	{
@@ -71,6 +71,10 @@ namespace SmartStore.Services.DataExchange.Internal
 				_orderItems.Clear();
 			if (_shipments != null)
 				_shipments.Clear();
+
+			_orderIds.Clear();
+			_customerIds.Clear();
+			_addressIds.Clear();
 		}
 
 		public LazyMultimap<Customer> Customers

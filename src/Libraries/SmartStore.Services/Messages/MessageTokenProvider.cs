@@ -13,6 +13,8 @@ using SmartStore.Core.Domain.Common;
 using SmartStore.Core.Domain.Customers;
 using SmartStore.Core.Domain.Directory;
 using SmartStore.Core.Domain.Forums;
+using SmartStore.Core.Domain.Localization;
+using SmartStore.Core.Domain.Media;
 using SmartStore.Core.Domain.Messages;
 using SmartStore.Core.Domain.News;
 using SmartStore.Core.Domain.Orders;
@@ -71,12 +73,14 @@ namespace SmartStore.Services.Messages
         private readonly IUrlRecordService _urlRecordService;
         private readonly IStoreService _storeService;
         private readonly IGenericAttributeService _attrService;
+		private readonly IPictureService _pictureService;
+		private readonly MediaSettings _mediaSettings;
 
-        #endregion
+		#endregion
 
-        #region Ctor
+		#region Ctor
 
-        public MessageTokenProvider(ILanguageService languageService,
+		public MessageTokenProvider(ILanguageService languageService,
             ILocalizationService localizationService, IDateTimeHelper dateTimeHelper,
             IEmailAccountService emailAccountService,
             IPriceFormatter priceFormatter, ICurrencyService currencyService, IWebHelper webHelper,
@@ -91,7 +95,9 @@ namespace SmartStore.Services.Messages
             ContactDataSettings contactDataSettings, ITopicService topicService,
             IDeliveryTimeService deliveryTimeService, IQuantityUnitService quantityUnitService,
             IUrlRecordService urlRecordService, IStoreService storeService,
-            IGenericAttributeService attrService)
+            IGenericAttributeService attrService,
+			IPictureService pictureService,
+			MediaSettings mediaSettings)
         {
             this._languageService = languageService;
             this._localizationService = localizationService;
@@ -122,33 +128,87 @@ namespace SmartStore.Services.Messages
             this._urlRecordService = urlRecordService;
             this._storeService = storeService;
             this._attrService = attrService;
+			this._pictureService = pictureService;
+			this._mediaSettings = mediaSettings;
         }
 
-        #endregion
+		#endregion
 
-        #region Utilities
+		#region Utilities
 
-        /// <summary>
-        /// Convert a collection to a HTML table
-        /// </summary>
-        /// <param name="order">Order</param>
-        /// <param name="languageId">Language identifier</param>
-        /// <returns>HTML table of products</returns>
-        protected virtual string ProductListToHtmlTable(Order order, int languageId)
+		protected virtual Picture GetPictureFor(Product product, string attributesXml)
+		{
+			Picture picture = null;
+
+			if (attributesXml.HasValue())
+			{
+				var combination = _productAttributeParser.FindProductVariantAttributeCombination(product.Id, attributesXml);
+
+				if (combination != null)
+				{
+					var picturesIds = combination.GetAssignedPictureIds();
+					if (picturesIds != null && picturesIds.Length > 0)
+						picture = _pictureService.GetPictureById(picturesIds[0]);
+				}
+			}
+
+			if (picture == null)
+			{
+				picture = _pictureService.GetPicturesByProductId(product.Id, 1).FirstOrDefault();
+			}
+
+			if (picture == null && !product.VisibleIndividually && product.ParentGroupedProductId > 0)
+			{
+				picture = _pictureService.GetPicturesByProductId(product.ParentGroupedProductId, 1).FirstOrDefault();
+			}
+
+			return picture;
+		}
+
+		protected virtual string ProductPictureToHtml(Picture picture, Language language, string productName, string productUrl, string storeLocation)
+		{
+			if (picture != null && _mediaSettings.MessageProductThumbPictureSize > 0)
+			{
+				var imageUrl = _pictureService.GetPictureUrl(picture, _mediaSettings.MessageProductThumbPictureSize, false, storeLocation);
+				if (imageUrl.HasValue())
+				{
+					var title = _localizationService.GetResource("Media.Product.ImageLinkTitleFormat", language.Id).FormatInvariant(productName);
+					var alternate = _localizationService.GetResource("Media.Product.ImageAlternateTextFormat", language.Id).FormatInvariant(productName);
+
+					var polaroid = "padding: 3px; background-color: #fff; border: 1px solid #ccc; border: 1px solid rgba(0,0,0,.2);";
+					var style = "max-width: {0}px; max-height: {0}px; {1}".FormatInvariant(_mediaSettings.MessageProductThumbPictureSize, polaroid);
+
+					var image = "<img src=\"{0}\" alt=\"{1}\" title=\"{2}\" style=\"{3}\" />".FormatInvariant(imageUrl, alternate, title, style);
+
+					if (productUrl.IsEmpty())
+						return image;
+					
+					return "<a href=\"{0}\" style=\"border: none;\">{1}</a>".FormatInvariant(productUrl, image);
+				}
+			}
+			return "";
+		}
+
+		/// <summary>
+		/// Convert a collection to a HTML table
+		/// </summary>
+		/// <param name="order">Order</param>
+		/// <param name="languageId">Language identifier</param>
+		/// <returns>HTML table of products</returns>
+		protected virtual string ProductListToHtmlTable(Order order, Language language)
         {
-            var result = "";
-
-            var language = _languageService.GetLanguageById(languageId);
-
             var sb = new StringBuilder();
-            sb.AppendLine("<table border=\"0\" style=\"width:100%;\">");
+			var storeLocation = _webHelper.GetStoreLocation(false);
+
+			sb.AppendLine("<table style=\"width: 100%; border: none;\">");
 
             #region Products
-            sb.AppendLine(string.Format("<tr style=\"background-color:{0};text-align:center;\">", _templatesSettings.Color1));
-            sb.AppendLine(string.Format("<th>{0}</th>", _localizationService.GetResource("Messages.Order.Product(s).Name", languageId)));
-            sb.AppendLine(string.Format("<th>{0}</th>", _localizationService.GetResource("Messages.Order.Product(s).Price", languageId)));
-            sb.AppendLine(string.Format("<th>{0}</th>", _localizationService.GetResource("Messages.Order.Product(s).Quantity", languageId)));
-            sb.AppendLine(string.Format("<th>{0}</th>", _localizationService.GetResource("Messages.Order.Product(s).Total", languageId)));
+
+            sb.AppendLine(string.Format("<tr style=\"background-color: {0}; text-align: center;\">", _templatesSettings.Color1));
+            sb.AppendLine(string.Format("<th>{0}</th>", _localizationService.GetResource("Messages.Order.Product(s).Name", language.Id)));
+            sb.AppendLine(string.Format("<th>{0}</th>", _localizationService.GetResource("Messages.Order.Product(s).Price", language.Id)));
+            sb.AppendLine(string.Format("<th>{0}</th>", _localizationService.GetResource("Messages.Order.Product(s).Quantity", language.Id)));
+            sb.AppendLine(string.Format("<th>{0}</th>", _localizationService.GetResource("Messages.Order.Product(s).Total", language.Id)));
             sb.AppendLine("</tr>");
 
             var table = order.OrderItems.ToList();
@@ -161,11 +221,7 @@ namespace SmartStore.Services.Messages
 
 				DeliveryTime deliveryTime = null;
 
-				// merging attribute combination data required?
-				if (_catalogSettings.ShowProductSku || (_shoppingCartSettings.ShowDeliveryTimes && product.IsShipEnabled))
-				{
-					product.MergeWithCombination(orderItem.AttributesXml, _productAttributeParser);
-				}
+				product.MergeWithCombination(orderItem.AttributesXml, _productAttributeParser);
 
 				if (_shoppingCartSettings.ShowDeliveryTimes && product.IsShipEnabled)
 				{
@@ -173,16 +229,29 @@ namespace SmartStore.Services.Messages
 				}
 
                 sb.AppendLine(string.Format("<tr style=\"background-color: {0};text-align: center;\">", _templatesSettings.Color2));
-                //product name
-				string productName = product.GetLocalized(x => x.Name, languageId);
+                
+				var productName = product.GetLocalized(x => x.Name, language.Id);
+				var productUrl = _productAttributeParser.GetProductUrlWithAttributes(orderItem.AttributesXml, product.Id, product.GetSeName());
 
-                sb.AppendLine("<td style=\"padding: 0.6em 0.4em;text-align: left;\">" + HttpUtility.HtmlEncode(productName));
-                //add download link
-                if (_downloadService.IsDownloadAllowed(orderItem))
+				sb.AppendLine("<td style=\"padding: 0.6em 0.4em; text-align: left;\">");
+
+				if (_mediaSettings.MessageProductThumbPictureSize > 0)
+				{
+					var pictureHtml = ProductPictureToHtml(GetPictureFor(product, orderItem.AttributesXml), language, productName, productUrl, storeLocation);
+					if (pictureHtml.HasValue())
+					{
+						sb.AppendLine("<div style=\"display: inline-block; float: left; margin: 0 8px 8px 0;\">{0}</div>".FormatInvariant(pictureHtml));
+					}
+				}
+
+				sb.AppendLine("<a href=\"{0}\">{1}</a>".FormatInvariant(productUrl, HttpUtility.HtmlEncode(productName)));
+
+				//add download link
+				if (_downloadService.IsDownloadAllowed(orderItem))
                 {
                     //TODO add a method for getting URL (use routing because it handles all SEO friendly URLs)
-                    string downloadUrl = string.Format("{0}download/getdownload/{1}", _webHelper.GetStoreLocation(false), orderItem.OrderItemGuid);
-                    string downloadLink = string.Format("<a class=\"link\" href=\"{0}\">{1}</a>", downloadUrl, _localizationService.GetResource("Messages.Order.Product(s).Download", languageId));
+                    string downloadUrl = string.Format("{0}download/getdownload/{1}", storeLocation, orderItem.OrderItemGuid);
+                    string downloadLink = string.Format("<a class=\"link\" href=\"{0}\">{1}</a>", downloadUrl, _localizationService.GetResource("Messages.Order.Product(s).Download", language.Id));
                     sb.AppendLine("&nbsp;&nbsp;(");
                     sb.AppendLine(downloadLink);
                     sb.AppendLine(")");
@@ -195,7 +264,7 @@ namespace SmartStore.Services.Messages
 
                     sb.AppendLine("<br />");
                     sb.AppendLine("<div class=\"delivery-time\">");
-                    sb.AppendLine("<span class=\"delivery-time-label\">" + _localizationService.GetResource("Products.DeliveryTime") + "</span>");
+                    sb.AppendLine("<span class=\"delivery-time-label\">" + _localizationService.GetResource("Products.DeliveryTime", language.Id) + "</span>");
                     sb.AppendLine("<span class=\"delivery-time-color\" style=\"background-color:" + deliveryTime.ColorHexValue + "\" title=\"" + deliveryTimeName + "\"></span>");
                     sb.AppendLine("<span class=\"delivery-time-value\">" + deliveryTimeName + "</span>");
                     sb.AppendLine("</div>");
@@ -213,7 +282,7 @@ namespace SmartStore.Services.Messages
                     if (!String.IsNullOrEmpty(product.Sku))
                     {
                         sb.AppendLine("<br />");
-						sb.AppendLine(string.Format(_localizationService.GetResource("Messages.Order.Product(s).SKU", languageId), HttpUtility.HtmlEncode(product.Sku)));
+						sb.AppendLine(string.Format(_localizationService.GetResource("Messages.Order.Product(s).SKU", language.Id), HttpUtility.HtmlEncode(product.Sku)));
                     }
                 }
                 sb.AppendLine("</td>");
@@ -237,9 +306,9 @@ namespace SmartStore.Services.Messages
                 sb.AppendLine(string.Format("<td style=\"padding: 0.6em 0.4em;text-align: right;\">{0}</td>", unitPriceStr));
 
                 var quantityUnit = _quantityUnitService.GetQuantityUnitById(product.QuantityUnitId);
+
                 sb.AppendLine(string.Format("<td style=\"padding: 0.6em 0.4em;text-align: center;\">{0} {1}</td>", 
-                    orderItem.Quantity, 
-                    quantityUnit == null ? "" : quantityUnit.GetLocalized(x => x.Name)));
+                    orderItem.Quantity, quantityUnit == null ? "" : quantityUnit.GetLocalized(x => x.Name)));
 
                 string priceStr = string.Empty;
                 switch (order.CustomerTaxDisplayType)
@@ -261,6 +330,7 @@ namespace SmartStore.Services.Messages
 
                 sb.AppendLine("</tr>");
             }
+
             #endregion
 
             #region Checkout Attributes
@@ -285,6 +355,7 @@ namespace SmartStore.Services.Messages
             string cusTaxTotal = string.Empty;
             string cusDiscount = string.Empty;
             string cusTotal = string.Empty;
+
             //subtotal, shipping, payment method fee
             switch (order.CustomerTaxDisplayType)
             {
@@ -383,41 +454,34 @@ namespace SmartStore.Services.Messages
             var orderTotalInCustomerCurrency = _currencyService.ConvertCurrency(order.OrderTotal, order.CurrencyRate);
             cusTotal = _priceFormatter.FormatPrice(orderTotalInCustomerCurrency, true, order.CustomerCurrencyCode, false, language);
 
-
-
-
             //subtotal
-            //sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{1}</strong></td> <td style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{2}</strong></td></tr>", _templatesSettings.Color3, _localizationService.GetResource("Messages.Order.SubTotal", languageId), cusSubTotal));
-            sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px 0;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", _localizationService.GetResource("Messages.Order.SubTotal", languageId), cusSubTotal));
+            sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", _localizationService.GetResource("Messages.Order.SubTotal", language.Id), cusSubTotal));
 
             //discount (applied to order subtotal)
             if (dislaySubTotalDiscount)
             {
-                //sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{1}</strong></td> <td style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{2}</strong></td></tr>", _templatesSettings.Color3, _localizationService.GetResource("Messages.Order.SubTotalDiscount", languageId), cusSubTotalDiscount));
-                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px 0;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", _localizationService.GetResource("Messages.Order.SubTotalDiscount", languageId), cusSubTotalDiscount));
+                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", _localizationService.GetResource("Messages.Order.SubTotalDiscount", language.Id), cusSubTotalDiscount));
             }
 
 
             //shipping
             if (dislayShipping)
             {
-                //sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{1}</strong></td> <td style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{2}</strong></td></tr>", _templatesSettings.Color3, _localizationService.GetResource("Messages.Order.Shipping", languageId), cusShipTotal));
-                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px 0;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", _localizationService.GetResource("Messages.Order.Shipping", languageId), cusShipTotal));
+                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", _localizationService.GetResource("Messages.Order.Shipping", language.Id), cusShipTotal));
             }
 
             //payment method fee
             if (displayPaymentMethodFee)
             {
-                string paymentMethodFeeTitle = _localizationService.GetResource("Messages.Order.PaymentMethodAdditionalFee", languageId);
-                //sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{1}</strong></td> <td style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{2}</strong></td></tr>", _templatesSettings.Color3, paymentMethodFeeTitle, cusPaymentMethodAdditionalFee));
-                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px 0;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", paymentMethodFeeTitle, cusPaymentMethodAdditionalFee));
+                string paymentMethodFeeTitle = _localizationService.GetResource("Messages.Order.PaymentMethodAdditionalFee", language.Id);
+
+                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", paymentMethodFeeTitle, cusPaymentMethodAdditionalFee));
             }
 
             //tax
             if (displayTax)
             {
-                //sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{1}</strong></td> <td style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{2}</strong></td></tr>", _templatesSettings.Color3, _localizationService.GetResource("Messages.Order.Tax", languageId), cusTaxTotal));
-                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px 0;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", _localizationService.GetResource("Messages.Order.Tax", languageId), cusTaxTotal));
+                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", _localizationService.GetResource("Messages.Order.Tax", language.Id), cusTaxTotal));
             }
             if (displayTaxRates)
             {
@@ -425,45 +489,45 @@ namespace SmartStore.Services.Messages
                 {
                     string taxRate = String.Format(_localizationService.GetResource("Messages.Order.TaxRateLine"), _priceFormatter.FormatTaxRate(item.Key));
                     string taxValue = _priceFormatter.FormatPrice(item.Value, true, order.CustomerCurrencyCode, false, language);
-                    //sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{1}</strong></td> <td style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{2}</strong></td></tr>", _templatesSettings.Color3, taxRate, taxValue));
-                    sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px 0;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", taxRate, taxValue));
+
+                    sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", taxRate, taxValue));
                 }
             }
 
             //discount
             if (dislayDiscount)
             {
-                //sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{1}</strong></td> <td style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{2}</strong></td></tr>", _templatesSettings.Color3, _localizationService.GetResource("Messages.Order.TotalDiscount", languageId), cusDiscount));
-                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px 0;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", _localizationService.GetResource("Messages.Order.TotalDiscount", languageId), cusDiscount));
+                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", _localizationService.GetResource("Messages.Order.TotalDiscount", language.Id), cusDiscount));
             }
 
             //gift cards
             var gcuhC = order.GiftCardUsageHistory;
             foreach (var gcuh in gcuhC)
             {
-                string giftCardText = String.Format(_localizationService.GetResource("Messages.Order.GiftCardInfo", languageId), HttpUtility.HtmlEncode(gcuh.GiftCard.GiftCardCouponCode));
+                string giftCardText = String.Format(_localizationService.GetResource("Messages.Order.GiftCardInfo", language.Id), HttpUtility.HtmlEncode(gcuh.GiftCard.GiftCardCouponCode));
                 string giftCardAmount = _priceFormatter.FormatPrice(-(_currencyService.ConvertCurrency(gcuh.UsedValue, order.CurrencyRate)), true, order.CustomerCurrencyCode, false, language);
-                //sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{1}</strong></td> <td style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{2}</strong></td></tr>", _templatesSettings.Color3, giftCardText, giftCardAmount));
-                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px 0;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", giftCardText, giftCardAmount));
+
+                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", giftCardText, giftCardAmount));
             }
 
             //reward points
             if (order.RedeemedRewardPointsEntry != null)
             {
-                string rpTitle = string.Format(_localizationService.GetResource("Messages.Order.RewardPoints", languageId), -order.RedeemedRewardPointsEntry.Points);
+                string rpTitle = string.Format(_localizationService.GetResource("Messages.Order.RewardPoints", language.Id), -order.RedeemedRewardPointsEntry.Points);
                 string rpAmount = _priceFormatter.FormatPrice(-(_currencyService.ConvertCurrency(order.RedeemedRewardPointsEntry.UsedAmount, order.CurrencyRate)), true, order.CustomerCurrencyCode, false, language);
-                //sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{1}</strong></td> <td style=\"background-color: {0};padding:0.6em 0.4 em;border-top:1px solid #ddd;\"><strong>{2}</strong></td></tr>", _templatesSettings.Color3, rpTitle, rpAmount));
-                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px 0;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", rpTitle, rpAmount));
+
+                sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"padding:8px;border-top:1px solid #ddd;\"><strong>{0}</strong></td> <td style=\"padding:8px;border-top:1px solid #ddd;\">{1}</td></tr>", rpTitle, rpAmount));
             }
 
             //total
-            sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"background-color: {0};padding:8px 0;border-top:1px solid #ddd;\"><strong>{1}</strong></td><td style=\"background-color: {0};padding:8px;border-top:1px solid #ddd;\"><strong>{2}</strong></td></tr>", _templatesSettings.Color3, _localizationService.GetResource("Messages.Order.OrderTotal", languageId), cusTotal));
-            #endregion
+            sb.AppendLine(string.Format("<tr style=\"text-align:right;\"><td>&nbsp;</td><td colspan=\"2\" style=\"background-color: {0};padding:8px;border-top:1px solid #ddd;\"><strong>{1}</strong></td><td style=\"background-color: {0};padding:8px;border-top:1px solid #ddd;\"><strong>{2}</strong></td></tr>", _templatesSettings.Color3, _localizationService.GetResource("Messages.Order.OrderTotal", language.Id), cusTotal));
+            
+			#endregion
 
             sb.AppendLine("</table>");
-            result = sb.ToString();
-            return result;
-        }
+
+            return sb.ToString();
+		}
 
         /// <summary>
         /// Convert a collection to a HTML table
@@ -471,17 +535,17 @@ namespace SmartStore.Services.Messages
         /// <param name="shipment">Shipment</param>
         /// <param name="languageId">Language identifier</param>
         /// <returns>HTML table of products</returns>
-        protected virtual string ProductListToHtmlTable(Shipment shipment, int languageId)
+        protected virtual string ProductListToHtmlTable(Shipment shipment, Language language)
         {
-            var result = "";
-
             var sb = new StringBuilder();
+
             sb.AppendLine("<table border=\"0\" style=\"width:100%;\">");
 
             #region Products
+
             sb.AppendLine(string.Format("<tr style=\"background-color:{0};text-align:center;\">", _templatesSettings.Color1));
-            sb.AppendLine(string.Format("<th>{0}</th>", _localizationService.GetResource("Messages.Order.Product(s).Name", languageId)));
-            sb.AppendLine(string.Format("<th>{0}</th>", _localizationService.GetResource("Messages.Order.Product(s).Quantity", languageId)));
+            sb.AppendLine(string.Format("<th>{0}</th>", _localizationService.GetResource("Messages.Order.Product(s).Name", language.Id)));
+            sb.AppendLine(string.Format("<th>{0}</th>", _localizationService.GetResource("Messages.Order.Product(s).Quantity", language.Id)));
             sb.AppendLine("</tr>");
 
             var table = shipment.ShipmentItems.ToList();
@@ -497,12 +561,15 @@ namespace SmartStore.Services.Messages
                     continue;
 
                 sb.AppendLine(string.Format("<tr style=\"background-color: {0};text-align: center;\">", _templatesSettings.Color2));
-                //product name
-				string productName = product.GetLocalized(x => x.Name, languageId);
 
-                sb.AppendLine("<td style=\"padding: 0.6em 0.4em;text-align: left;\">" + HttpUtility.HtmlEncode(productName));
-                //attributes
-                if (!String.IsNullOrEmpty(orderItem.AttributeDescription))
+				var productName = product.GetLocalized(x => x.Name, language.Id);
+				var productUrl = _productAttributeParser.GetProductUrlWithAttributes(orderItem.AttributesXml, product.Id, product.GetSeName());
+
+				sb.AppendLine("<td style=\"padding: 0.6em 0.4em;text-align: left;\">");
+				sb.AppendLine("<a href=\"{0}\">{1}</a>".FormatInvariant(productUrl, HttpUtility.HtmlEncode(productName)));
+
+				//attributes
+				if (!String.IsNullOrEmpty(orderItem.AttributeDescription))
                 {
                     sb.AppendLine("<br />");
                     sb.AppendLine(orderItem.AttributeDescription);
@@ -515,7 +582,7 @@ namespace SmartStore.Services.Messages
                     if (!String.IsNullOrEmpty(product.Sku))
                     {
                         sb.AppendLine("<br />");
-						sb.AppendLine(string.Format(_localizationService.GetResource("Messages.Order.Product(s).SKU", languageId), HttpUtility.HtmlEncode(product.Sku)));
+						sb.AppendLine(string.Format(_localizationService.GetResource("Messages.Order.Product(s).SKU", language.Id), HttpUtility.HtmlEncode(product.Sku)));
                     }
                 }
                 sb.AppendLine("</td>");
@@ -524,12 +591,13 @@ namespace SmartStore.Services.Messages
 
                 sb.AppendLine("</tr>");
             }
+
             #endregion
 
             sb.AppendLine("</table>");
-            result = sb.ToString();
-            return result;
-        }
+
+            return sb.ToString();
+		}
 
         protected virtual string TopicToHtml(string systemName, int languageId)
         {
@@ -722,7 +790,7 @@ namespace SmartStore.Services.Messages
             tokens.Add(new Token("Contact.ContactEmailAddress", _contactDataSettings.ContactEmailAddress));
         }
 
-        public virtual void AddOrderTokens(IList<Token> tokens, Order order, int languageId)
+        public virtual void AddOrderTokens(IList<Token> tokens, Order order, Language language)
         {
 			tokens.Add(new Token("Order.ID", order.Id.ToString()));
 			tokens.Add(new Token("Order.OrderNumber", order.GetOrderNumber()));
@@ -762,10 +830,9 @@ namespace SmartStore.Services.Messages
 
             tokens.Add(new Token("Order.PaymentMethod", paymentMethodName));
             tokens.Add(new Token("Order.VatNumber", order.VatNumber));
-            tokens.Add(new Token("Order.Product(s)", ProductListToHtmlTable(order, languageId), true));
+            tokens.Add(new Token("Order.Product(s)", ProductListToHtmlTable(order, language), true));
             tokens.Add(new Token("Order.CustomerComment", order.CustomerOrderComment, true));
 
-            var language = _languageService.GetLanguageById(languageId);
             if (language != null && !String.IsNullOrEmpty(language.LanguageCulture))
             {
                 DateTime createdOn = _dateTimeHelper.ConvertToUserTime(order.CreatedOnUtc, TimeZoneInfo.Utc, _dateTimeHelper.GetCustomerTimeZone(order.Customer));
@@ -779,8 +846,8 @@ namespace SmartStore.Services.Messages
             // TODO add a method for getting URL (use routing because it handles all SEO friendly URLs)
             tokens.Add(new Token("Order.OrderURLForCustomer", string.Format("{0}order/details/{1}", _webHelper.GetStoreLocation(false), order.Id), true));
 
-            tokens.Add(new Token("Order.Disclaimer", TopicToHtml("Disclaimer", languageId), true));
-            tokens.Add(new Token("Order.ConditionsOfUse", TopicToHtml("ConditionsOfUse", languageId), true));
+            tokens.Add(new Token("Order.Disclaimer", TopicToHtml("Disclaimer", language.Id), true));
+            tokens.Add(new Token("Order.ConditionsOfUse", TopicToHtml("ConditionsOfUse", language.Id), true));
 
             //event notification
             _eventPublisher.EntityTokensAdded(order, tokens);
@@ -803,11 +870,11 @@ namespace SmartStore.Services.Messages
 			return result;
 		}
 
-        public virtual void AddShipmentTokens(IList<Token> tokens, Shipment shipment, int languageId)
+        public virtual void AddShipmentTokens(IList<Token> tokens, Shipment shipment, Language language)
         {
             tokens.Add(new Token("Shipment.ShipmentNumber", shipment.Id.ToString()));
             tokens.Add(new Token("Shipment.TrackingNumber", shipment.TrackingNumber));
-            tokens.Add(new Token("Shipment.Product(s)", ProductListToHtmlTable(shipment, languageId), true));
+            tokens.Add(new Token("Shipment.Product(s)", ProductListToHtmlTable(shipment, language), true));
             tokens.Add(new Token("Shipment.URLForCustomer", string.Format("{0}order/shipmentdetails/{1}", _webHelper.GetStoreLocation(false), shipment.Id), true));
 
             //event notification
@@ -929,20 +996,36 @@ namespace SmartStore.Services.Messages
             _eventPublisher.EntityTokensAdded(newsComment, tokens);
         }
 
-		public virtual void AddProductTokens(IList<Token> tokens, Product product, int languageId)
+		public virtual void AddProductTokens(IList<Token> tokens, Product product, Language language)
         {
+			// TODO: add a method for getting URL (use routing because it handles all SEO friendly URLs)
+			var storeLocation = _webHelper.GetStoreLocation(false);
+			var productUrl = storeLocation + product.GetSeName();
+			var productName = product.GetLocalized(x => x.Name, language.Id);
+
 			tokens.Add(new Token("Product.ID", product.Id.ToString()));
 			tokens.Add(new Token("Product.Sku", product.Sku));
-			tokens.Add(new Token("Product.Name", product.GetLocalized(x => x.Name, languageId)));
-			tokens.Add(new Token("Product.ShortDescription", product.GetLocalized(x => x.ShortDescription, languageId), true));
+			tokens.Add(new Token("Product.Name", productName));
+			tokens.Add(new Token("Product.ShortDescription", product.GetLocalized(x => x.ShortDescription, language.Id), true));
 			tokens.Add(new Token("Product.StockQuantity", product.StockQuantity.ToString()));
-
-            // TODO: add a method for getting URL (use routing because it handles all SEO friendly URLs)
-            var productUrl = string.Format("{0}{1}", _webHelper.GetStoreLocation(false), product.GetSeName());
             tokens.Add(new Token("Product.ProductURLForCustomer", productUrl, true));
 
-            //event notification
-            _eventPublisher.EntityTokensAdded(product, tokens);
+			var currency = _workContext.WorkingCurrency;
+
+			var additionalShippingCharge = _currencyService.ConvertFromPrimaryStoreCurrency(product.AdditionalShippingCharge, currency);
+			var additionalShippingChargeFormatted = _priceFormatter.FormatPrice(additionalShippingCharge, false, currency.CurrencyCode, false, language);
+
+			tokens.Add(new Token("Product.AdditionalShippingCharge", additionalShippingChargeFormatted));
+
+			if (_mediaSettings.MessageProductThumbPictureSize > 0)
+			{
+				var pictureHtml = ProductPictureToHtml(GetPictureFor(product, null), language, productName, productUrl, storeLocation);
+
+				tokens.Add(new Token("Product.Thumbnail", pictureHtml, true));
+			}
+
+			//event notification
+			_eventPublisher.EntityTokensAdded(product, tokens);
         }
 
         public virtual void AddForumTopicTokens(IList<Token> tokens, ForumTopic forumTopic,
@@ -972,12 +1055,12 @@ namespace SmartStore.Services.Messages
             _eventPublisher.EntityTokensAdded(forumPost, tokens);
         }
 
-		public virtual void AddForumTokens(IList<Token> tokens, Forum forum, int languageId)
+		public virtual void AddForumTokens(IList<Token> tokens, Forum forum, Language language)
         {
             //TODO add a method for getting URL (use routing because it handles all SEO friendly URLs)
-            var forumUrl = string.Format("{0}boards/forum/{1}/{2}", _webHelper.GetStoreLocation(false), forum.Id, forum.GetSeName(languageId));
+            var forumUrl = string.Format("{0}boards/forum/{1}/{2}", _webHelper.GetStoreLocation(false), forum.Id, forum.GetSeName(language.Id));
             tokens.Add(new Token("Forums.ForumURL", forumUrl, true));
-            tokens.Add(new Token("Forums.ForumName", forum.GetLocalized(x => x.Name, languageId)));
+            tokens.Add(new Token("Forums.ForumName", forum.GetLocalized(x => x.Name, language.Id)));
 
             //event notification
             _eventPublisher.EntityTokensAdded(forum, tokens);
@@ -1075,7 +1158,9 @@ namespace SmartStore.Services.Messages
                 "%Product.ShortDescription%", 
                 "%Product.ProductURLForCustomer%",
                 "%Product.StockQuantity%",
-                "%RecurringPayment.ID%",
+				"%Product.AdditionalShippingCharge%",
+				"%Product.Thumbnail%",
+				"%RecurringPayment.ID%",
                 "%Shipment.ShipmentNumber%",
                 "%Shipment.TrackingNumber%",
                 "%Shipment.Product(s)%",

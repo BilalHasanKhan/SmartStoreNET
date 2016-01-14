@@ -41,6 +41,7 @@ namespace SmartStore.Data.Migrations
 			builder.AddOrUpdate("Common.ShowAll", "Show all", "Alle anzeigen");
 			builder.AddOrUpdate("Admin.Common.Selected", "Selected", "Ausgewählte");
 			builder.AddOrUpdate("Admin.Common.Entity", "Entity", "Entität");
+			builder.AddOrUpdate("Admin.Common.Placeholder", "Placeholder", "Platzhalter");
 
 
 			builder.AddOrUpdate("Admin.Common.FilesDeleted",
@@ -55,9 +56,9 @@ namespace SmartStore.Data.Migrations
 				"Cannot load the provider {0}.",
 				"Der Provider {0} konnte nicht geladen werden.");
 
-			builder.AddOrUpdate("ActivityLog.EditPaymentMethod",
-				"Edited payment method '{0}' ({1})",
-				"Zahlungsart '{0}' ({1}) bearbeitet");
+			builder.AddOrUpdate("Admin.Common.NoEntriesSelected",
+				"No entries have been selected.",
+				"Es wurden keine Einträge ausgewählt.");
 
 			builder.AddOrUpdate("Admin.Configuration.Settings.Blog.ShowHeaderRSSUrl.Hint",
 				"Check to enable the blog RSS feed link in customers browser address bar.",
@@ -108,6 +109,10 @@ namespace SmartStore.Data.Migrations
 				"Pro Sprache darf nur ein aktiver SEO Name festgelegt werden.");
 
 
+			builder.AddOrUpdate("Admin.DataExchange.Export.FileNamePatternDescriptions",
+				"ID of export profil;Folder name of export profil;SEO name of export profil;Store ID;SEO name of store;One based file index;Random number;UTC timestamp",
+				"ID des Exportprofils;Ordername des Exportprofils;SEO Name des Exportprofils;Shop ID;SEO Name des Shops;Mit 1 beginnender Dateiindex;Zufallszahl;UTC Zeitstempel");
+
 			builder.AddOrUpdate("Admin.DataExchange.Export.NotPreviewCompatible",
 				"This option is not taken into account in the preview.",
 				"Diese Option wird in der Vorschau nicht berücksichtigt.");
@@ -125,8 +130,8 @@ namespace SmartStore.Data.Migrations
 			builder.AddOrUpdate("Admin.DataExchange.Export.Projection.NoGroupedProducts",
 				"Do not export grouped products",
 				"Keine Gruppenprodukte exportieren",
-				"Specifies whether to export grouped products. If this option is deactivated, then the associated products will be deactivated.",
-				"Legt fest, ob Gruppenprodukte exportiert werden sollen. Ist diese Option deaktiviert, so werden die zur Gruppe gehörenden Produkte exportiert.");
+				"Specifies whether to export grouped products. If this option is activated, then the associated products will be exported.",
+				"Legt fest, ob Gruppenprodukte exportiert werden sollen. Ist diese Option aktiviert, so werden die zur Gruppe gehörenden Produkte exportiert.");
 
 			builder.AddOrUpdate("Admin.DataExchange.Export.NoFiltering",
 				"There is no filtering available.",
@@ -249,6 +254,23 @@ namespace SmartStore.Data.Migrations
 			builder.AddOrUpdate("Admin.System.SystemInfo.GarbageCollectSuccessful",
 				"The memory has been successfully cleaned up.",
 				"Der Arbeitsspeicher wurde erfolgreich aufgeräumt.");
+
+			builder.AddOrUpdate("Admin.Configuration.Themes.NoConfigurationRequired",
+				"Theme requires no configuration",
+				"Theme benötigt keine Konfiguration");
+
+
+			builder.AddOrUpdate("Tax.LegalInfoFooter2",
+				"* All prices {0}, plus shipping",
+				"* Alle Preise {0}, zzgl. Versandkosten");
+
+			builder.AddOrUpdate("Tax.LegalInfoProductDetail2",
+				"{0} {1} {2}plus shipping",
+				"{0} {1} {2} zzgl. Versandkosten");
+
+			builder.AddOrUpdate("ShoppingCart.ShippingInfoLink",
+				"For a complete listing of all shipping costs please click <a href=\"{0}\">here</a>.",
+				"Eine vollständige Liste aller Versandkosten finden Sie <a href=\"{0}\">hier</a>.");
 		}
     }
 }

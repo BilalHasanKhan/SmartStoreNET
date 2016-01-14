@@ -90,8 +90,8 @@ namespace SmartStore.Data.Migrations
 				"Export von Profile \"{0}\" ist abgeschlossen");
 
 			builder.AddOrUpdate("Admin.DataExchange.Export.CompletedEmail.Body",
-				"This is an automatic notification of store \"{0}\" about a recent data export. You can disable the sending of this message in the details of the export profile.",
-				"Dies ist eine automatische Benachrichtung von Shop \"{0}\" über einen erfolgten Datenexport. Sie können den Versand dieser Mitteilung in den Details des Exportprofils deaktivieren.");
+				"This is an automatic notification of store \"{0}\" about a recent data export.",
+				"Dies ist eine automatische Benachrichtung von Shop \"{0}\" über einen erfolgten Datenexport.");
 
 			builder.AddOrUpdate("Admin.DataExchange.Export.FolderName",
 				"Folder name",
@@ -100,8 +100,8 @@ namespace SmartStore.Data.Migrations
 				"Legt den Namen des Ordners fest, in den die Daten exportiert werden.");
 
 			builder.AddOrUpdate("Admin.DataExchange.Export.FolderAndFileName.Validate",
-				"Please enter a valid folder and file name. Example for file names: %Misc.FileNumber%-%ExportProfile.Id%-gmc-%Store.Name%",
-				"Bitte einen gültigen Ordner- und Dateinamen eingeben. Beispiel für Dateinamen: %Misc.FileNumber%-%ExportProfile.Id%-gmc-%Store.Name%");
+				"Please enter a valid folder and file name. Example for file names: %File.Index%-%Profile.Id%-gmc-%Store.Name%",
+				"Bitte einen gültigen Ordner- und Dateinamen eingeben. Beispiel für Dateinamen: %File.Index%-%Profile.Id%-gmc-%Store.Name%");
 
 
 			builder.AddOrUpdate("Admin.DataExchange.Export.Deployment.CreateZip",

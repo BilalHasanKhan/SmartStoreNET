@@ -3,14 +3,13 @@ using System.Linq;
 using System.Web.Mvc;
 using SmartStore.Admin.Models.Messages;
 using SmartStore.Core.Domain.Common;
-using SmartStore.Services.DataExchange.Providers;
 using SmartStore.Services.Helpers;
 using SmartStore.Services.Messages;
 using SmartStore.Services.Security;
 using SmartStore.Services.Stores;
 using SmartStore.Web.Framework;
 using SmartStore.Web.Framework.Controllers;
-using SmartStore.Web.Framework.Mvc;
+using SmartStore.Web.Framework.Security;
 using Telerik.Web.Mvc;
 
 namespace SmartStore.Admin.Controllers
@@ -43,8 +42,7 @@ namespace SmartStore.Admin.Controllers
 
 			model.GridPageSize = _adminAreaSettings.GridPageSize;
 
-			model.AvailableStores.Add(new SelectListItem { Text = T("Admin.Common.All"), Value = "0" });
-			model.AvailableStores.AddRange(stores.ToSelectListItems());
+			model.AvailableStores = stores.ToSelectListItems();
 		}
 
 		public ActionResult Index()
@@ -69,7 +67,7 @@ namespace SmartStore.Admin.Controllers
 					var store = _storeService.GetStoreById(x.StoreId);
 
 					m.CreatedOn = _dateTimeHelper.ConvertToUserTime(x.CreatedOnUtc, DateTimeKind.Utc);
-					m.StoreName = store != null ? store.Name : "Unknown";
+					m.StoreName = store != null ? store.Name : "".NaIfEmpty();
 
 					return m;
 				}),
@@ -81,26 +79,33 @@ namespace SmartStore.Admin.Controllers
 		[HttpPost, GridAction(EnableCustomBinding = true)]
 		public ActionResult SubscriptionList(GridCommand command, NewsLetterSubscriptionListModel model)
         {
-            if (!_permissionService.Authorize(StandardPermissionProvider.ManageNewsletterSubscribers))
-                return AccessDeniedView();
+			var gridModel = new GridModel<NewsLetterSubscriptionModel>();
 
-            var newsletterSubscriptions = _newsLetterSubscriptionService.GetAllNewsLetterSubscriptions(
-				model.SearchEmail, command.Page - 1, command.PageSize, true, model.StoreId);
+			if (_permissionService.Authorize(StandardPermissionProvider.ManageNewsletterSubscribers))
+			{
+				var newsletterSubscriptions = _newsLetterSubscriptionService.GetAllNewsLetterSubscriptions(
+					model.SearchEmail, command.Page - 1, command.PageSize, true, model.StoreId);
 
-            var gridModel = new GridModel<NewsLetterSubscriptionModel>
-            {
-                Data = newsletterSubscriptions.Select(x =>
+				gridModel.Data = newsletterSubscriptions.Select(x =>
 				{
 					var m = x.ToModel();
 					var store = _storeService.GetStoreById(x.StoreId);
 
 					m.CreatedOn = _dateTimeHelper.ConvertToUserTime(x.CreatedOnUtc, DateTimeKind.Utc);
-					m.StoreName = store != null ? store.Name : "Unknown";
+					m.StoreName = store != null ? store.Name : "".NaIfEmpty();
 
 					return m;
-				}),
-                Total = newsletterSubscriptions.TotalCount
-            };
+				});
+
+				gridModel.Total = newsletterSubscriptions.TotalCount;
+			}
+			else
+			{
+				gridModel.Data = Enumerable.Empty<NewsLetterSubscriptionModel>();
+
+				NotifyAccessDenied();
+			}
+
             return new JsonResult
             {
                 Data = gridModel
@@ -110,39 +115,20 @@ namespace SmartStore.Admin.Controllers
         [GridAction(EnableCustomBinding = true)]
         public ActionResult SubscriptionUpdate(NewsLetterSubscriptionModel model, GridCommand command)
         {
-            if (!_permissionService.Authorize(StandardPermissionProvider.ManageNewsletterSubscribers))
-                return AccessDeniedView();
-            
-            if (!ModelState.IsValid)
-            {
-                //display the first model error
-                var modelStateErrors = this.ModelState.Values.SelectMany(x => x.Errors).Select(x => x.ErrorMessage);
-                return Content(modelStateErrors.FirstOrDefault());
-            }
+			if (_permissionService.Authorize(StandardPermissionProvider.ManageNewsletterSubscribers))
+			{
+				if (!ModelState.IsValid)
+				{
+					var modelStateErrors = this.ModelState.Values.SelectMany(x => x.Errors).Select(x => x.ErrorMessage);
+					return Content(modelStateErrors.FirstOrDefault());
+				}
 
-            var subscription = _newsLetterSubscriptionService.GetNewsLetterSubscriptionById(model.Id);
-            subscription.Email = model.Email;
-            subscription.Active = model.Active;
+				var subscription = _newsLetterSubscriptionService.GetNewsLetterSubscriptionById(model.Id);
+				subscription.Email = model.Email;
+				subscription.Active = model.Active;
 
-            _newsLetterSubscriptionService.UpdateNewsLetterSubscription(subscription);
-
-			var listModel = new NewsLetterSubscriptionListModel();
-			PrepareNewsLetterSubscriptionListModel(listModel);
-
-            return SubscriptionList(command, listModel);
-        }
-
-        [GridAction(EnableCustomBinding = true)]
-        public ActionResult SubscriptionDelete(int id, GridCommand command)
-        {
-            if (!_permissionService.Authorize(StandardPermissionProvider.ManageNewsletterSubscribers))
-                return AccessDeniedView();
-
-            var subscription = _newsLetterSubscriptionService.GetNewsLetterSubscriptionById(id);
-            if (subscription == null)
-                throw new ArgumentException("No subscription found with the specified id");
-
-            _newsLetterSubscriptionService.DeleteNewsLetterSubscription(subscription);
+				_newsLetterSubscriptionService.UpdateNewsLetterSubscription(subscription);
+			}
 
 			var listModel = new NewsLetterSubscriptionListModel();
 			PrepareNewsLetterSubscriptionListModel(listModel);
@@ -150,41 +136,20 @@ namespace SmartStore.Admin.Controllers
 			return SubscriptionList(command, listModel);
         }
 
-		[Compress]
-		public ActionResult ExportCsv()
+        [GridAction(EnableCustomBinding = true)]
+        public ActionResult SubscriptionDelete(int id, GridCommand command)
         {
-            if (!_permissionService.Authorize(StandardPermissionProvider.ManageNewsletterSubscribers))
-                return AccessDeniedView();
+			if (_permissionService.Authorize(StandardPermissionProvider.ManageNewsletterSubscribers))
+			{
+				var subscription = _newsLetterSubscriptionService.GetNewsLetterSubscriptionById(id);
 
-			return Export(SubscriberCsvExportProvider.SystemName, null);
-		}
+				_newsLetterSubscriptionService.DeleteNewsLetterSubscription(subscription);
+			}
 
-        [HttpPost]
-        public ActionResult ImportCsv(FormCollection form)
-        {
-            if (!_permissionService.Authorize(StandardPermissionProvider.ManageNewsletterSubscribers))
-                return AccessDeniedView();
+			var listModel = new NewsLetterSubscriptionListModel();
+			PrepareNewsLetterSubscriptionListModel(listModel);
 
-            try
-            {            
-                var file = Request.Files["importcsvfile"];
-				if (file != null && file.ContentLength > 0)
-				{
-					var result = _newsLetterSubscriptionService.ImportSubscribers(file.InputStream);
-
-					NotifySuccess(T("Admin.Promotions.NewsLetterSubscriptions.ImportEmailsSuccess", result.NewRecords, result.ModifiedRecords));
-				}
-				else
-				{
-					NotifyError(T("Admin.Common.UploadFile"));
-				}
-            }
-            catch (Exception exc)
-            {
-                NotifyError(exc);
-            }
-
-			return RedirectToAction("List");
+			return SubscriptionList(command, listModel);
         }
 	}
 }

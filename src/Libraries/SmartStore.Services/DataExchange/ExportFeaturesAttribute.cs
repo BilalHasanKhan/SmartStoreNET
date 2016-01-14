@@ -1,7 +1,7 @@
 ﻿using System;
 using SmartStore.Core.Domain.DataExchange;
 
-namespace SmartStore.Services.DataExchange
+namespace SmartStore.Services.DataExchange.Export
 {
 	/// <summary>
 	/// Declares data processing types supported by an export provider.
@@ -10,11 +10,6 @@ namespace SmartStore.Services.DataExchange
 	[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 	public sealed class ExportFeaturesAttribute : Attribute
 	{
-		public ExportFeaturesAttribute(params ExportFeatures[] features)
-		{
-			Features = features;
-		}
-
-		public ExportFeatures[] Features { get; set; }
+		public ExportFeatures Features { get; set; }
 	}
 }

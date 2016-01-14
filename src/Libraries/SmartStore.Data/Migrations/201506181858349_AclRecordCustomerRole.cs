@@ -123,20 +123,20 @@ namespace SmartStore.Data.Migrations
             builder.AddOrUpdate("Admin.Configuration.Settings.Catalog.ShowManufacturersOnHomepage",
                 "Show manufacturers on homepage",
                 "Zeige Hersteller auf der Homepage",
-                "Specifies whether manufacturers will be displayed on the homepage.",
-                "Bestimmt ob Hersteller auf der Homepage angezeigt werden.");
+                "Specifies whether manufacturers are displayed on the homepage.",
+                "Legt fest, ob Hersteller auf der Homepage angezeigt werden.");
 
             builder.AddOrUpdate("Admin.Configuration.Settings.Catalog.ShowManufacturerPictures",
                 "Show manufacturer pictures on homepage",
                 "Zeige Herstellerbilder auf der Homepage",
-                "Specifies whether manufacturers will be displayed as images or textual links on the homepage.",
-                "Bestimmt ob Hersteller auf der Homepage als Bilder oder textuelle Links angezeigt werden.");
+                "Specifies whether manufacturers are displayed as images or textual links on the homepage.",
+				"Legt fest, ob Hersteller auf der Homepage als Bilder oder textuelle Links angezeigt werden.");
 
             builder.AddOrUpdate("Admin.Configuration.Settings.CustomerUser.CustomerNumberEnabled",
                 "Customers can enter a customer number",
                 "Kunden können Kundennummer hinterlegen",
                 "Specifies whether customers can enter a customer number.",
-                "Bestimmt ob Kunden eine Kundennummer hinterlegen können.");
+				"Legt fest, ob Kunden eine Kundennummer hinterlegen können.");
 
             builder.AddOrUpdate("Account.Fields.CustomerNumber",
                 "Customer number",
@@ -145,8 +145,8 @@ namespace SmartStore.Data.Migrations
             builder.AddOrUpdate("Admin.Configuration.Settings.Tax.VatRequired",
                 "Customers must enter a VATIN",
                 "Kunden müssen eine Steuernummer angeben",
-                "Specifies whether Customers must enter a VAT identification number.",
-                "Bestimmt ob Kunden bei der  Registrierung eine Steuernummer angeben müssen.");
+                "Specifies whether customers must enter a VAT identification number.",
+				"Legt fest, ob Kunden bei der Registrierung eine Steuernummer angeben müssen.");
 
             builder.AddOrUpdate("Account.Fields.Vat.Required",
                 "Please enter your VATIN",

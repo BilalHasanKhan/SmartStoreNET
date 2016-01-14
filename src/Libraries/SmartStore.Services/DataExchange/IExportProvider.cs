@@ -1,12 +1,12 @@
 ﻿using SmartStore.Core.Domain.DataExchange;
 using SmartStore.Core.Plugins;
 
-namespace SmartStore.Services.DataExchange
+namespace SmartStore.Services.DataExchange.Export
 {
 	public partial interface IExportProvider : IProvider, IUserEditable
 	{
 		/// <summary>
-		/// Th exported entity type
+		/// The exported entity type
 		/// </summary>
 		ExportEntityType EntityType { get; }
 

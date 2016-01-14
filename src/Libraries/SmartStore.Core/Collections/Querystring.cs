@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using System.Web;
 using System.Collections.Specialized;
+using System.Diagnostics.CodeAnalysis;
 
 namespace SmartStore.Collections
 {
@@ -28,6 +29,7 @@ namespace SmartStore.Collections
         /// </summary>
         /// <param name="s">the string to extract the querystring from</param>
         /// <returns>a string representing only the querystring</returns>
+        [SuppressMessage("ReSharper", "StringIndexOfIsCultureSpecific.1")]
         public static string ExtractQuerystring(string s)
         {
             if (!string.IsNullOrEmpty(s))
@@ -45,22 +47,23 @@ namespace SmartStore.Collections
         /// </summary>
         /// <param name="s">the string to parse</param>
         /// <returns>the QueryString object </returns>
-        public QueryString FillFromString(string s)
+        public QueryString FillFromString(string s, bool urlDecode = false)
         {
             base.Clear();
             if (string.IsNullOrEmpty(s))
             {
                 return this;
             }
+
             foreach (string keyValuePair in ExtractQuerystring(s).Split('&'))
             {
                 if (string.IsNullOrEmpty(keyValuePair))
                 {
                     continue;
                 }
+
                 string[] split = keyValuePair.Split('=');
-                base.Add(split[0],
-                         split.Length == 2 ? split[1] : "");
+                base.Add(split[0], split.Length == 2 ? (urlDecode ? HttpUtility.UrlDecode(split[1]) : split[1]) : "");
             }
             return this;
         }
@@ -73,7 +76,7 @@ namespace SmartStore.Collections
         {
             if (HttpContext.Current != null)
             {
-                return FillFromString(HttpContext.Current.Request.QueryString.ToString());
+                return FillFromString(HttpContext.Current.Request.QueryString.ToString(), true);
             }
             base.Clear();
             return this;
@@ -182,7 +185,7 @@ namespace SmartStore.Collections
             {
                 if (!string.IsNullOrEmpty(base.Keys[i]))
                 {
-                    foreach (string val in base[base.Keys[i]].Split(','))
+					foreach (string val in base[base.Keys[i]].EmptyNull().Split(','))
                     {
                         builder.Append((builder.Length == 0) ? "?" : "&").Append(
                             HttpUtility.UrlEncode(base.Keys[i])).Append("=").Append(val);

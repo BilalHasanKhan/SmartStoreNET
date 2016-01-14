@@ -181,6 +181,7 @@
     <Compile Include="Controllers\CustomerController.cs" />
     <Compile Include="Controllers\CustomerRoleController.cs" />
     <Compile Include="Controllers\ExportController.cs" />
+    <Compile Include="Controllers\ImportController.cs" />
     <Compile Include="Controllers\QuantityUnitController.cs" />
     <Compile Include="Controllers\DeliveryTimeController.cs" />
     <Compile Include="Controllers\DiscountController.cs" />
@@ -234,7 +235,6 @@
     <Compile Include="Infrastructure\AutoMapperStartupTask.cs" />
     <Compile Include="Models\Catalog\CategoryTreeModel.cs" />
     <Compile Include="Models\Catalog\ProductBundleItemModel.cs" />
-    <Compile Include="Models\Catalog\PrintableProductsModel.cs" />
     <Compile Include="Models\Catalog\ProductVariantAttributeCombinationModel.cs" />
     <Compile Include="Models\Catalog\BulkEditProductModel.cs" />
     <Compile Include="Models\Catalog\BulkEditListModel.cs" />
@@ -251,11 +251,14 @@
     <Compile Include="Models\Common\MaintenanceModel.cs" />
     <Compile Include="Models\Common\SystemWarningModel.cs" />
     <Compile Include="Models\Common\SystemInfoModel.cs" />
+    <Compile Include="Models\DataExchange\CsvConfigurationModel.cs" />
     <Compile Include="Models\DataExchange\ExportDeploymentModel.cs" />
     <Compile Include="Models\DataExchange\ExportFilterModel.cs" />
+    <Compile Include="Models\DataExchange\ImportProfileModel.cs" />
     <Compile Include="Models\DataExchange\ProfileInfoForProviderModel.cs" />
     <Compile Include="Models\DataExchange\ExportPreviewModel.cs" />
     <Compile Include="Models\DataExchange\ExportProjectionModel.cs" />
+    <Compile Include="Models\Directory\CountryListModel.cs" />
     <Compile Include="Models\Directory\QuantityUnitModel.cs" />
     <Compile Include="Models\DataExchange\ExportProfileModel.cs" />
     <Compile Include="Models\Messages\MessageTemplateListModel.cs" />
@@ -375,6 +378,8 @@
     <Compile Include="Validators\Common\GenericAttributeValidator.cs" />
     <Compile Include="Validators\ContentSlider\ContentSliderValidator.cs" />
     <Compile Include="Validators\DataExchange\ExportDeplomentValidator.cs" />
+    <Compile Include="Validators\DataExchange\CsvConfigurationValidator.cs" />
+    <Compile Include="Validators\DataExchange\ImportProfileValidator.cs" />
     <Compile Include="Validators\DataExchange\ExportProfileValidator.cs" />
     <Compile Include="Validators\Directory\DeliveryTimeValidator.cs" />
     <Compile Include="Validators\Messages\NewsLetterSubscriptionValidator.cs" />
@@ -501,9 +506,6 @@
     <Content Include="Views\Shared\_AdminRoot.cshtml" />
     <Content Include="Views\Home\MarketplaceFeed.cshtml" />
     <Content Include="Views\Order\ShipmentDetails.Print.cshtml" />
-    <Content Include="Views\Product\PdfCatalog.Print.cshtml" />
-    <Content Include="Views\Product\PdfCatalog.Print.Footer.cshtml" />
-    <Content Include="Views\Product\PdfCatalog.Print.Cover.cshtml" />
     <Content Include="Views\QuantityUnit\_CreateOrUpdate.cshtml" />
     <Content Include="Views\QuantityUnit\Create.cshtml" />
     <Content Include="Views\QuantityUnit\Edit.cshtml" />
@@ -535,6 +537,14 @@
     <Content Include="Views\UrlRecord\Edit.cshtml" />
     <Content Include="Views\UrlRecord\_CreateOrUpdate.cshtml" />
     <Content Include="Views\UrlRecord\NamesPerEntity.cshtml" />
+    <Content Include="Views\Export\ProfileFileCount.cshtml" />
+    <Content Include="Views\Export\ProfileFileDetails.cshtml" />
+    <Content Include="Views\Import\List.cshtml" />
+    <Content Include="Views\Import\Create.cshtml" />
+    <Content Include="Views\Import\_CreateOrUpdate.cshtml" />
+    <Content Include="Views\Import\Edit.cshtml" />
+    <Content Include="Views\Shared\CsvConfiguration.cshtml" />
+    <Content Include="Views\Import\_ColumnMappings.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Content\admin.less" />

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Xml.Serialization;
 
-namespace SmartStore.Services.DataExchange
+namespace SmartStore.Services.DataExchange.Export
 {
 	[Serializable]
 	public class DataExportResult
@@ -29,7 +29,7 @@ namespace SmartStore.Services.DataExchange
 		/// <summary>
 		/// Files created by last export
 		/// </summary>
-		public IList<ExportFileInfo> Files { get; set; }
+		public List<ExportFileInfo> Files { get; set; }
 
 		/// <summary>
 		/// The path of the folder with the export files

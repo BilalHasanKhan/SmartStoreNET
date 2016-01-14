@@ -14,7 +14,7 @@ namespace SmartStore.Utilities
 		/// <param name="subDirectory">Name of a sub directory to be created and returned (optional)</param>
 		public static string TempDir(string subDirectory = null)
 		{
-			string path = CommonHelper.GetAppSetting<string>("sm:TempDirectory", "~/App_Data/_temp");
+			string path = CommonHelper.GetAppSetting("sm:TempDirectory", "~/App_Data/_temp");
 			path = CommonHelper.MapPath(path);
 
 			if (!Directory.Exists(path))
@@ -38,26 +38,25 @@ namespace SmartStore.Utilities
 		{
 			try
 			{
-				string dir = FileSystemHelper.TempDir();
+				var dir = TempDir();
 
 				if (Directory.Exists(dir))
 				{
-					FileInfo fi;
 					var oldestDate = DateTime.Now.Subtract(new TimeSpan(0, 5, 0, 0));
 					var files = Directory.EnumerateFiles(dir);
 
 					foreach (string file in files)
 					{
-						fi = new FileInfo(file);
+						var fi = new FileInfo(file);
 
-						if (fi != null && fi.LastWriteTime < oldestDate)
-							FileSystemHelper.Delete(file);
+						if (fi.LastWriteTime < oldestDate)
+							Delete(file);
 					}
 				}
 			}
-			catch (Exception exc)
+			catch (Exception ex)
 			{
-				exc.Dump();
+				ex.Dump();
 			}
 		}
 
@@ -84,6 +83,7 @@ namespace SmartStore.Utilities
 				result = false;
 				exc.Dump();
 			}
+
 			return result;
 		}
 
@@ -207,6 +207,30 @@ namespace SmartStore.Utilities
 				}
 				catch (Exception) { }
 			}
+		}
+
+		/// <summary>
+		/// Creates a non existing directory name
+		/// </summary>
+		/// <param name="directoryPath">Path of a directory</param>
+		/// <param name="defaultName">Default name for directory. <c>null</c> to use a guid.</param>
+		/// <returns>Non existing directory name</returns>
+		public static string CreateNonExistingDirectoryName(string directoryPath, string defaultName)
+		{
+			if (defaultName.IsEmpty())
+				defaultName = Guid.NewGuid().ToString();
+
+			if (directoryPath.IsEmpty() || !Directory.Exists(directoryPath))
+				return defaultName;
+
+			var newName = defaultName;
+
+			for (int i = 1; i < 999999 && Directory.Exists(Path.Combine(directoryPath, newName)); ++i)
+			{
+				newName = defaultName + i.ToString();
+			}
+
+			return newName;
 		}
 
 		/// <summary>

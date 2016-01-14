@@ -9,11 +9,13 @@ using Autofac.Builder;
 using Autofac.Core;
 using Autofac.Integration.Mvc;
 using Autofac.Integration.WebApi;
+using SmartStore.ComponentModel;
 using SmartStore.Core;
 using SmartStore.Core.Caching;
 using SmartStore.Core.Configuration;
 using SmartStore.Core.Data;
 using SmartStore.Core.Data.Hooks;
+using SmartStore.Core.Domain.DataExchange;
 using SmartStore.Core.Email;
 using SmartStore.Core.Events;
 using SmartStore.Core.Fakes;
@@ -39,6 +41,8 @@ using SmartStore.Services.Common;
 using SmartStore.Services.Configuration;
 using SmartStore.Services.Customers;
 using SmartStore.Services.DataExchange;
+using SmartStore.Services.DataExchange.Export;
+using SmartStore.Services.DataExchange.Import;
 using SmartStore.Services.Directory;
 using SmartStore.Services.Discounts;
 using SmartStore.Services.Events;
@@ -63,23 +67,20 @@ using SmartStore.Services.Tax;
 using SmartStore.Services.Themes;
 using SmartStore.Services.Topics;
 using SmartStore.Utilities;
-using SmartStore.Web.Framework.Controllers;
+using SmartStore.Web.Framework.Bundling;
+using SmartStore.Web.Framework.Filters;
 using SmartStore.Web.Framework.Localization;
-using SmartStore.Web.Framework.Mvc.Bundles;
-using SmartStore.Web.Framework.Mvc.Routes;
 using SmartStore.Web.Framework.Plugins;
-using SmartStore.Web.Framework.Themes;
+using SmartStore.Web.Framework.Routing;
+using SmartStore.Web.Framework.Theming;
 using SmartStore.Web.Framework.UI;
 using SmartStore.Web.Framework.WebApi;
 using SmartStore.Web.Framework.WebApi.Configuration;
 using Module = Autofac.Module;
-using SmartStore.Core.Domain.DataExchange;
-using SmartStore.Utilities.Reflection;
-using SmartStore.Services.DataExchange.Import;
 
 namespace SmartStore.Web.Framework
 {
-    public class DependencyRegistrar : IDependencyRegistrar
+	public class DependencyRegistrar : IDependencyRegistrar
     {
 		public virtual void Register(ContainerBuilder builder, ITypeFinder typeFinder, bool isActiveModule)
         {
@@ -87,8 +88,9 @@ namespace SmartStore.Web.Framework
 			var pluginFinder = new PluginFinder();
 			builder.RegisterInstance(pluginFinder).As<IPluginFinder>().SingleInstance();
 			builder.RegisterType<PluginMediator>();
-			
+
 			// modules
+			builder.RegisterModule(new CoreModule(typeFinder));
 			builder.RegisterModule(new DbModule(typeFinder));
 			builder.RegisterModule(new CachingModule());
 			builder.RegisterModule(new LocalizationModule());
@@ -102,20 +104,40 @@ namespace SmartStore.Web.Framework
 			builder.RegisterModule(new PackagingModule());
 			builder.RegisterModule(new ProvidersModule(typeFinder, pluginFinder));
             builder.RegisterModule(new TasksModule(typeFinder));
+        }
 
+        public int Order
+        {
+            get { return -100; }
+        }
+    }
+
+	#region Modules
+
+	public class CoreModule : Module
+	{
+		private readonly ITypeFinder _typeFinder;
+
+		public CoreModule(ITypeFinder typeFinder)
+		{
+			_typeFinder = typeFinder;
+		}
+
+		protected override void Load(ContainerBuilder builder)
+		{
 			// sources
 			builder.RegisterSource(new SettingsSource());
 
-            // web helper
-            builder.RegisterType<WebHelper>().As<IWebHelper>().InstancePerRequest(); 
+			// web helper
+			builder.RegisterType<WebHelper>().As<IWebHelper>().InstancePerRequest();
 
-            // work context
-            builder.RegisterType<WebWorkContext>().As<IWorkContext>().WithStaticCache().InstancePerRequest();
-			
+			// work context
+			builder.RegisterType<WebWorkContext>().As<IWorkContext>().WithStaticCache().InstancePerRequest();
+
 			// store context
 			builder.RegisterType<WebStoreContext>().As<IStoreContext>().InstancePerRequest();
 
-            // services
+			// services
 			builder.RegisterType<CategoryService>().As<ICategoryService>().InstancePerRequest();
 			builder.RegisterType<CategoryService>().Named<ICategoryService>("nocache")
 				.WithNullCache()
@@ -131,42 +153,42 @@ namespace SmartStore.Web.Framework
 			builder.RegisterType<ProductService>().As<IProductService>().InstancePerRequest();
 			builder.RegisterType<ProductService>().Named<IProductService>("nocache").InstancePerRequest();
 
-            builder.RegisterType<BackInStockSubscriptionService>().As<IBackInStockSubscriptionService>().InstancePerRequest();
-            builder.RegisterType<CompareProductsService>().As<ICompareProductsService>().InstancePerRequest();
-            builder.RegisterType<RecentlyViewedProductsService>().As<IRecentlyViewedProductsService>().InstancePerRequest();
-            builder.RegisterType<PriceCalculationService>().As<IPriceCalculationService>().InstancePerRequest();
-            builder.RegisterType<PriceFormatter>().As<IPriceFormatter>().InstancePerRequest();
-            builder.RegisterType<ProductAttributeFormatter>().As<IProductAttributeFormatter>().InstancePerLifetimeScope();
-            builder.RegisterType<ProductAttributeParser>().As<IProductAttributeParser>().InstancePerRequest();
+			builder.RegisterType<BackInStockSubscriptionService>().As<IBackInStockSubscriptionService>().InstancePerRequest();
+			builder.RegisterType<CompareProductsService>().As<ICompareProductsService>().InstancePerRequest();
+			builder.RegisterType<RecentlyViewedProductsService>().As<IRecentlyViewedProductsService>().InstancePerRequest();
+			builder.RegisterType<PriceCalculationService>().As<IPriceCalculationService>().InstancePerRequest();
+			builder.RegisterType<PriceFormatter>().As<IPriceFormatter>().InstancePerRequest();
+			builder.RegisterType<ProductAttributeFormatter>().As<IProductAttributeFormatter>().InstancePerLifetimeScope();
+			builder.RegisterType<ProductAttributeParser>().As<IProductAttributeParser>().InstancePerRequest();
 			builder.RegisterType<ProductAttributeService>().As<IProductAttributeService>().InstancePerRequest();
-            builder.RegisterType<CopyProductService>().As<ICopyProductService>().InstancePerRequest();
+			builder.RegisterType<CopyProductService>().As<ICopyProductService>().InstancePerRequest();
 			builder.RegisterType<SpecificationAttributeService>().As<ISpecificationAttributeService>().InstancePerRequest();
-            builder.RegisterType<ProductTemplateService>().As<IProductTemplateService>().InstancePerRequest();
+			builder.RegisterType<ProductTemplateService>().As<IProductTemplateService>().InstancePerRequest();
 			builder.RegisterType<CategoryTemplateService>().As<ICategoryTemplateService>().InstancePerRequest();
 			builder.RegisterType<ManufacturerTemplateService>().As<IManufacturerTemplateService>().InstancePerRequest();
 			builder.RegisterType<ProductTagService>().As<IProductTagService>().WithStaticCache().InstancePerRequest();
 
-            builder.RegisterType<AffiliateService>().As<IAffiliateService>().InstancePerRequest();
-            builder.RegisterType<AddressService>().As<IAddressService>().InstancePerRequest();
+			builder.RegisterType<AffiliateService>().As<IAffiliateService>().InstancePerRequest();
+			builder.RegisterType<AddressService>().As<IAddressService>().InstancePerRequest();
 			builder.RegisterType<GenericAttributeService>().As<IGenericAttributeService>().InstancePerRequest();
-            builder.RegisterType<FulltextService>().As<IFulltextService>().InstancePerRequest();
-            builder.RegisterType<MaintenanceService>().As<IMaintenanceService>().InstancePerRequest();
+			builder.RegisterType<FulltextService>().As<IFulltextService>().InstancePerRequest();
+			builder.RegisterType<MaintenanceService>().As<IMaintenanceService>().InstancePerRequest();
 
 			builder.RegisterType<CustomerContentService>().As<ICustomerContentService>().InstancePerRequest();
 			builder.RegisterType<CustomerService>().As<ICustomerService>().InstancePerRequest();
-            builder.RegisterType<CustomerRegistrationService>().As<ICustomerRegistrationService>().InstancePerRequest();
-            builder.RegisterType<CustomerReportService>().As<ICustomerReportService>().InstancePerRequest();
+			builder.RegisterType<CustomerRegistrationService>().As<ICustomerRegistrationService>().InstancePerRequest();
+			builder.RegisterType<CustomerReportService>().As<ICustomerReportService>().InstancePerRequest();
 
-            builder.RegisterType<PermissionService>().As<IPermissionService>().WithStaticCache() .InstancePerRequest();
+			builder.RegisterType<PermissionService>().As<IPermissionService>().WithStaticCache().InstancePerRequest();
 
-            builder.RegisterType<AclService>().As<IAclService>().WithStaticCache().InstancePerRequest();
+			builder.RegisterType<AclService>().As<IAclService>().WithStaticCache().InstancePerRequest();
 
-            builder.RegisterType<GeoCountryLookup>().As<IGeoCountryLookup>().InstancePerRequest();
+			builder.RegisterType<GeoCountryLookup>().As<IGeoCountryLookup>().InstancePerRequest();
 			builder.RegisterType<CountryService>().As<ICountryService>().InstancePerRequest();
 			builder.RegisterType<CurrencyService>().As<ICurrencyService>().InstancePerRequest();
 
 			builder.RegisterType<DeliveryTimeService>().As<IDeliveryTimeService>().InstancePerRequest();
-            builder.RegisterType<QuantityUnitService>().As<IQuantityUnitService>().InstancePerRequest();
+			builder.RegisterType<QuantityUnitService>().As<IQuantityUnitService>().InstancePerRequest();
 			builder.RegisterType<MeasureService>().As<IMeasureService>().InstancePerRequest();
 			builder.RegisterType<StateProvinceService>().As<IStateProvinceService>().InstancePerRequest();
 
@@ -175,73 +197,136 @@ namespace SmartStore.Web.Framework
 
 			builder.RegisterType<DiscountService>().As<IDiscountService>().InstancePerRequest();
 
-            builder.RegisterType<SettingService>().As<ISettingService>().WithStaticCache().InstancePerRequest();
+			builder.RegisterType<SettingService>().As<ISettingService>().WithStaticCache().InstancePerRequest();
 
-            builder.RegisterType<DownloadService>().As<IDownloadService>().InstancePerRequest();
-            builder.RegisterType<ImageCache>().As<IImageCache>().InstancePerRequest();
-            builder.RegisterType<ImageResizerService>().As<IImageResizerService>().SingleInstance();
-            builder.RegisterType<PictureService>().As<IPictureService>().InstancePerRequest();
+			builder.RegisterType<DownloadService>().As<IDownloadService>().InstancePerRequest();
+			builder.RegisterType<ImageCache>().As<IImageCache>().InstancePerRequest();
+			builder.RegisterType<ImageResizerService>().As<IImageResizerService>().SingleInstance();
+			builder.RegisterType<PictureService>().As<IPictureService>().InstancePerRequest();
 
-            builder.RegisterType<CheckoutAttributeFormatter>().As<ICheckoutAttributeFormatter>().InstancePerRequest();
-            builder.RegisterType<CheckoutAttributeParser>().As<ICheckoutAttributeParser>().InstancePerRequest();
+			builder.RegisterType<CheckoutAttributeFormatter>().As<ICheckoutAttributeFormatter>().InstancePerRequest();
+			builder.RegisterType<CheckoutAttributeParser>().As<ICheckoutAttributeParser>().InstancePerRequest();
 			builder.RegisterType<CheckoutAttributeService>().As<ICheckoutAttributeService>().InstancePerRequest();
-            builder.RegisterType<GiftCardService>().As<IGiftCardService>().InstancePerRequest();
-            builder.RegisterType<OrderService>().As<IOrderService>().InstancePerRequest();
-            builder.RegisterType<OrderReportService>().As<IOrderReportService>().InstancePerRequest();
-            builder.RegisterType<OrderProcessingService>().As<IOrderProcessingService>().InstancePerRequest();
-            builder.RegisterType<OrderTotalCalculationService>().As<IOrderTotalCalculationService>().InstancePerRequest();
-            builder.RegisterType<ShoppingCartService>().As<IShoppingCartService>().InstancePerRequest();
+			builder.RegisterType<GiftCardService>().As<IGiftCardService>().InstancePerRequest();
+			builder.RegisterType<OrderService>().As<IOrderService>().InstancePerRequest();
+			builder.RegisterType<OrderReportService>().As<IOrderReportService>().InstancePerRequest();
+			builder.RegisterType<OrderProcessingService>().As<IOrderProcessingService>().InstancePerRequest();
+			builder.RegisterType<OrderTotalCalculationService>().As<IOrderTotalCalculationService>().InstancePerRequest();
+			builder.RegisterType<ShoppingCartService>().As<IShoppingCartService>().InstancePerRequest();
 
-            builder.RegisterType<PaymentService>().As<IPaymentService>().InstancePerRequest();
+			builder.RegisterType<PaymentService>().As<IPaymentService>().InstancePerRequest();
 
-            builder.RegisterType<EncryptionService>().As<IEncryptionService>().InstancePerRequest();
-            builder.RegisterType<FormsAuthenticationService>().As<IAuthenticationService>().InstancePerRequest();
+			builder.RegisterType<EncryptionService>().As<IEncryptionService>().InstancePerRequest();
+			builder.RegisterType<FormsAuthenticationService>().As<IAuthenticationService>().InstancePerRequest();
 
 			builder.RegisterType<UrlRecordService>().As<IUrlRecordService>().WithStaticCache().InstancePerRequest();
 
-            builder.RegisterType<ShipmentService>().As<IShipmentService>().InstancePerRequest();
+			builder.RegisterType<ShipmentService>().As<IShipmentService>().InstancePerRequest();
 			builder.RegisterType<ShippingService>().As<IShippingService>().InstancePerRequest();
 
 			builder.RegisterType<TaxCategoryService>().As<ITaxCategoryService>().InstancePerRequest();
-            builder.RegisterType<TaxService>().As<ITaxService>().InstancePerRequest();
+			builder.RegisterType<TaxService>().As<ITaxService>().InstancePerRequest();
 
 			builder.RegisterType<ForumService>().As<IForumService>().InstancePerRequest();
 
 			builder.RegisterType<PollService>().As<IPollService>().InstancePerRequest();
-            builder.RegisterType<BlogService>().As<IBlogService>().InstancePerRequest();
-            builder.RegisterType<WidgetService>().As<IWidgetService>().InstancePerRequest();
-            builder.RegisterType<TopicService>().As<ITopicService>().InstancePerRequest();
+			builder.RegisterType<BlogService>().As<IBlogService>().InstancePerRequest();
+			builder.RegisterType<WidgetService>().As<IWidgetService>().InstancePerRequest();
+			builder.RegisterType<TopicService>().As<ITopicService>().InstancePerRequest();
 			builder.RegisterType<NewsService>().As<INewsService>().InstancePerRequest();
 
-            builder.RegisterType<DateTimeHelper>().As<IDateTimeHelper>().InstancePerRequest();
-            builder.RegisterType<SitemapGenerator>().As<ISitemapGenerator>().InstancePerRequest();
-            builder.RegisterType<PageAssetsBuilder>().As<IPageAssetsBuilder>().InstancePerRequest();
+			builder.RegisterType<DateTimeHelper>().As<IDateTimeHelper>().InstancePerRequest();
+			builder.RegisterType<SitemapGenerator>().As<ISitemapGenerator>().InstancePerRequest();
+			builder.RegisterType<PageAssetsBuilder>().As<IPageAssetsBuilder>().InstancePerRequest();
 
-            builder.RegisterType<ScheduleTaskService>().As<IScheduleTaskService>().InstancePerRequest();
-
-            builder.RegisterType<ImportManager>().As<IImportManager>().InstancePerRequest();
+			builder.RegisterType<ScheduleTaskService>().As<IScheduleTaskService>().InstancePerRequest();
 			builder.RegisterType<SyncMappingService>().As<ISyncMappingService>().InstancePerRequest();
 
 			builder.RegisterType<ExportProfileService>().As<IExportProfileService>().InstancePerRequest();
+			builder.RegisterType<ImportProfileService>().As<IImportProfileService>().InstancePerRequest();
+			builder.RegisterType<DataExporter>().As<IDataExporter>().InstancePerRequest();
+			builder.RegisterType<DataImporter>().As<IDataImporter>().InstancePerRequest();
 
-            builder.RegisterType<MobileDeviceHelper>().As<IMobileDeviceHelper>().InstancePerRequest();
+			builder.RegisterType<MobileDeviceHelper>().As<IMobileDeviceHelper>().InstancePerRequest();
 			builder.RegisterType<UAParserUserAgent>().As<IUserAgent>().InstancePerRequest();
 			builder.RegisterType<WkHtmlToPdfConverter>().As<IPdfConverter>().InstancePerRequest();
 
-            builder.RegisterType<ExternalAuthorizer>().As<IExternalAuthorizer>().InstancePerRequest();
-            builder.RegisterType<OpenAuthenticationService>().As<IOpenAuthenticationService>().InstancePerRequest();
+			builder.RegisterType<ExternalAuthorizer>().As<IExternalAuthorizer>().InstancePerRequest();
+			builder.RegisterType<OpenAuthenticationService>().As<IOpenAuthenticationService>().InstancePerRequest();
 
-			builder.RegisterType<FilterService>().As<IFilterService>().InstancePerRequest();          
+			builder.RegisterType<FilterService>().As<IFilterService>().InstancePerRequest();
 			builder.RegisterType<CommonServices>().As<ICommonServices>().WithStaticCache().InstancePerRequest();
-        }
+		}
 
-        public int Order
-        {
-            get { return -100; }
-        }
-    }
+		protected override void AttachToComponentRegistration(IComponentRegistry componentRegistry, IComponentRegistration registration)
+		{
+			// Look for first settable property of type "ICommonServices" and inject
+			var servicesProperty = FindCommonServicesProperty(registration.Activator.LimitType);
 
-	#region Modules
+			if (servicesProperty == null)
+				return;
+
+			var fastProperty = new FastProperty(servicesProperty);
+
+			registration.Activated += (sender, e) =>
+			{
+				if (DataSettings.DatabaseIsInstalled())
+				{
+					var services = e.Context.Resolve<ICommonServices>();
+					fastProperty.SetValue(e.Instance, services);
+				}
+			};
+		}
+
+		private static PropertyInfo FindCommonServicesProperty(Type type)
+		{
+			var prop = type
+				.GetProperties(BindingFlags.SetProperty | BindingFlags.Public | BindingFlags.Instance)
+				.Select(p => new
+				{
+					PropertyInfo = p,
+					p.PropertyType,
+					IndexParameters = p.GetIndexParameters(),
+					Accessors = p.GetAccessors(false)
+				})
+				.Where(x => x.PropertyType == typeof(ICommonServices)) // must be ICommonServices
+				.Where(x => x.IndexParameters.Count() == 0) // must not be an indexer
+				.Where(x => x.Accessors.Length != 1 || x.Accessors[0].ReturnType == typeof(void)) //must have get/set, or only set
+				.Select(x => x.PropertyInfo)
+				.FirstOrDefault();
+
+			return prop;
+		}
+
+		private IEnumerable<Action<IComponentContext, object>> BuildLoggerInjectors(Type componentType)
+		{
+			// Look for first settable property of type "ICommonServices" 
+			var loggerProperties = componentType
+				.GetProperties(BindingFlags.SetProperty | BindingFlags.Public | BindingFlags.Instance)
+				.Select(p => new
+				{
+					PropertyInfo = p,
+					p.PropertyType,
+					IndexParameters = p.GetIndexParameters(),
+					Accessors = p.GetAccessors(false)
+				})
+				.Where(x => x.PropertyType == typeof(ILogger)) // must be a logger
+				.Where(x => x.IndexParameters.Count() == 0) // must not be an indexer
+				.Where(x => x.Accessors.Length != 1 || x.Accessors[0].ReturnType == typeof(void)) //must have get/set, or only set
+				.Select(x => new FastProperty(x.PropertyInfo));
+
+			// Return an array of actions that resolve a logger and assign the property
+			foreach (var prop in loggerProperties)
+			{
+				yield return (ctx, instance) =>
+				{
+					string component = componentType.ToString();
+					var logger = ctx.Resolve<ILogger>();
+					prop.SetValue(instance, logger);
+				};
+			}
+		}
+	}
 
 	public class DbModule : Module
 	{
@@ -379,33 +464,30 @@ namespace SmartStore.Web.Framework
 
 		private IEnumerable<Action<IComponentContext, object>> BuildLoggerInjectors(Type componentType)
 		{
-			if (DataSettings.DatabaseIsInstalled())
-			{
-				// Look for settable properties of type "ILogger" 
-				var loggerProperties = componentType
-					.GetProperties(BindingFlags.SetProperty | BindingFlags.Public | BindingFlags.Instance)
-					.Select(p => new
-					{
-						PropertyInfo = p,
-						p.PropertyType,
-						IndexParameters = p.GetIndexParameters(),
-						Accessors = p.GetAccessors(false)
-					})
-					.Where(x => x.PropertyType == typeof(ILogger)) // must be a logger
-					.Where(x => x.IndexParameters.Count() == 0) // must not be an indexer
-					.Where(x => x.Accessors.Length != 1 || x.Accessors[0].ReturnType == typeof(void)) //must have get/set, or only set
-					.Select(x => new FastProperty(x.PropertyInfo));
-
-				// Return an array of actions that resolve a logger and assign the property
-				foreach (var prop in loggerProperties)
+			// Look for settable properties of type "ILogger" 
+			var loggerProperties = componentType
+				.GetProperties(BindingFlags.SetProperty | BindingFlags.Public | BindingFlags.Instance)
+				.Select(p => new
 				{
-					yield return (ctx, instance) =>
-					{
-						string component = componentType.ToString();
-						var logger = ctx.Resolve<ILogger>();
-						prop.SetValue(instance, logger);
-					};
-				}
+					PropertyInfo = p,
+					p.PropertyType,
+					IndexParameters = p.GetIndexParameters(),
+					Accessors = p.GetAccessors(false)
+				})
+				.Where(x => x.PropertyType == typeof(ILogger)) // must be a logger
+				.Where(x => x.IndexParameters.Count() == 0) // must not be an indexer
+				.Where(x => x.Accessors.Length != 1 || x.Accessors[0].ReturnType == typeof(void)) //must have get/set, or only set
+				.Select(x => new FastProperty(x.PropertyInfo));
+
+			// Return an array of actions that resolve a logger and assign the property
+			foreach (var prop in loggerProperties)
+			{
+				yield return (ctx, instance) =>
+				{
+					string component = componentType.ToString();
+					var logger = ctx.Resolve<ILogger>();
+					prop.SetValue(instance, logger);
+				};
 			}
 		}
 	}
@@ -772,7 +854,7 @@ namespace SmartStore.Web.Framework
 				var isConfigurable = typeof(IConfigurable).IsAssignableFrom(type);
 				var isEditable = typeof(IUserEditable).IsAssignableFrom(type);
 				var isHidden = GetIsHidden(type);
-				var exportSupport = GetExportFeatures(type);				
+				var exportFeature = GetExportFeature(type);				
 
 				var registration = builder.RegisterType(type).Named<IProvider>(systemName).InstancePerRequest().PropertiesAutowired(PropertyWiringOptions.None);
 				registration.WithMetadata<ProviderMetadata>(m =>
@@ -789,7 +871,7 @@ namespace SmartStore.Web.Framework
 					m.For(em => em.IsConfigurable, isConfigurable);
 					m.For(em => em.IsEditable, isEditable);
 					m.For(em => em.IsHidden, isHidden);
-					m.For(em => em.ExportSupport, exportSupport);
+					m.For(em => em.ExportFeatures, exportFeature);
 				});
 
 				// register specific provider type
@@ -867,16 +949,16 @@ namespace SmartStore.Web.Framework
 			return false;
 		}
 
-		private ExportFeatures[] GetExportFeatures(Type type)
+		private ExportFeatures GetExportFeature(Type type)
 		{
 			var attr = type.GetAttribute<ExportFeaturesAttribute>(false);
 
-			if (attr != null && attr.Features != null)
+			if (attr != null)
 			{
 				return attr.Features;
 			}
 
-			return new ExportFeatures[0];
+			return ExportFeatures.None;
 		}
 
 		private Tuple<string/*Name*/, string/*Description*/> GetFriendlyName(Type type, PluginDescriptor descriptor)
@@ -1022,14 +1104,6 @@ namespace SmartStore.Web.Framework
             {
 				var buildMethod = BuildMethod.MakeGenericMethod(ts.ServiceType);
 				yield return (IComponentRegistration)buildMethod.Invoke(null, null);
-
-				//// Perf with Fasterflect
-				//yield return (IComponentRegistration)Fasterflect.TryInvokeWithValuesExtensions.TryCallMethodWithValues(
-				//	typeof(SettingsSource),
-				//	null, 
-				//	"BuildRegistration", 
-				//	new Type[] { ts.ServiceType }, 
-				//	BindingFlags.Static | BindingFlags.NonPublic);
             }
         }
 

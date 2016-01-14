@@ -1,29 +1,28 @@
 using System;
+using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml;
 using SmartStore.Core;
 using SmartStore.Core.Caching;
 using SmartStore.Core.Data;
+using SmartStore.Core.Domain.DataExchange;
 using SmartStore.Core.Domain.Localization;
 using SmartStore.Core.Events;
 using SmartStore.Core.Logging;
 using SmartStore.Core.Plugins;
-using System.Text.RegularExpressions;
-using System.Collections.Concurrent;
-using System.Web.Mvc;
-using System.Collections;
-using SmartStore.Services.DataExchange.Import;
 
 namespace SmartStore.Services.Localization
 {
-    /// <summary>
-    /// Provides information about localization
-    /// </summary>
-    public partial class LocalizationService : ILocalizationService
+	/// <summary>
+	/// Provides information about localization
+	/// </summary>
+	public partial class LocalizationService : ILocalizationService
     {
         #region Constants
         private const string LOCALESTRINGRESOURCES_ALL_KEY = "SmartStore.lsr.all-{0}";
@@ -438,7 +437,6 @@ namespace SmartStore.Services.Localization
 
 				foreach (var xel in nodes.Cast<XmlElement>())
 				{
-
 					string name = xel.GetAttribute("Name").TrimSafe();
 					string value = "";
 					var valueNode = xel.SelectSingleNode("Value");
@@ -459,7 +457,7 @@ namespace SmartStore.Services.Localization
 					var resource = language.LocaleStringResources.Where(x => x.ResourceName.Equals(name, StringComparison.InvariantCultureIgnoreCase)).FirstOrDefault();
 					if (resource != null)
 					{
-						if (mode.IsSet<ImportModeFlags>(ImportModeFlags.Update))
+						if (mode.HasFlag(ImportModeFlags.Update))
 						{
 							if (updateTouchedResources || !resource.IsTouched.GetValueOrDefault())
 							{
@@ -471,7 +469,7 @@ namespace SmartStore.Services.Localization
 					}
 					else
 					{
-						if (mode.IsSet<ImportModeFlags>(ImportModeFlags.Insert))
+						if (mode.HasFlag(ImportModeFlags.Insert))
 						{
 							toAdd.Add(
 								new LocaleStringResource()
@@ -489,13 +487,7 @@ namespace SmartStore.Services.Localization
 				_lsrRepository.InsertRange(toAdd, 500);
 				toAdd.Clear();
 
-				_lsrRepository.AutoCommitEnabled = null;
-				toUpdate.Each(x =>
-				{
-					_lsrRepository.Update(x);
-				});
-
-				_lsrRepository.Context.SaveChanges();
+				_lsrRepository.UpdateRange(toUpdate);
 				toUpdate.Clear();
 
 				//clear cache

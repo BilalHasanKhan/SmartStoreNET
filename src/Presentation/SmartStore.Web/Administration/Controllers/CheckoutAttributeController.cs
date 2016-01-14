@@ -12,6 +12,8 @@ using SmartStore.Services.Orders;
 using SmartStore.Services.Security;
 using SmartStore.Services.Tax;
 using SmartStore.Web.Framework.Controllers;
+using SmartStore.Web.Framework.Filters;
+using SmartStore.Web.Framework.Security;
 using Telerik.Web.Mvc;
 
 namespace SmartStore.Admin.Controllers
@@ -102,7 +104,6 @@ namespace SmartStore.Admin.Controllers
         
         #region Checkout attributes
 
-        //list
         public ActionResult Index()
         {
             return RedirectToAction("List");
@@ -119,23 +120,31 @@ namespace SmartStore.Admin.Controllers
         [HttpPost, GridAction(EnableCustomBinding = true)]
         public ActionResult List(GridCommand command)
         {
-            if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageCatalog))
-                return AccessDeniedView();
+			var model = new GridModel<CheckoutAttributeModel>();
 
-            var checkoutAttributes = _checkoutAttributeService.GetAllCheckoutAttributes(true);
-            var gridModel = new GridModel<CheckoutAttributeModel>
+			if (_services.Permissions.Authorize(StandardPermissionProvider.ManageCatalog))
+			{
+				var checkoutAttributes = _checkoutAttributeService.GetAllCheckoutAttributes(true);
+
+				model.Data = checkoutAttributes.Select(x =>
+				{
+					var caModel = x.ToModel();
+					caModel.AttributeControlTypeName = x.AttributeControlType.GetLocalizedEnum(_services.Localization, _services.WorkContext);
+					return caModel;
+				});
+
+				model.Total = checkoutAttributes.Count();
+			}
+			else
+			{
+				model.Data = Enumerable.Empty<CheckoutAttributeModel>();
+
+				NotifyAccessDenied();
+			}
+
+			return new JsonResult
             {
-                Data = checkoutAttributes.Select(x =>
-                {
-                    var caModel = x.ToModel();
-                    caModel.AttributeControlTypeName = x.AttributeControlType.GetLocalizedEnum(_services.Localization, _services.WorkContext);
-                    return caModel;
-                }),
-                Total = checkoutAttributes.Count()
-            };
-            return new JsonResult
-            {
-                Data = gridModel
+                Data = model
             };
         }
         
@@ -154,7 +163,7 @@ namespace SmartStore.Admin.Controllers
             return View(model);
         }
 
-        [HttpPost, ParameterBasedOnFormNameAttribute("save-continue", "continueEditing")]
+        [HttpPost, ParameterBasedOnFormName("save-continue", "continueEditing")]
         public ActionResult Create(CheckoutAttributeModel model, bool continueEditing)
         {
             if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageCatalog))
@@ -201,7 +210,7 @@ namespace SmartStore.Admin.Controllers
             return View(model);
         }
 
-        [HttpPost, ParameterBasedOnFormNameAttribute("save-continue", "continueEditing")]
+        [HttpPost, ParameterBasedOnFormName("save-continue", "continueEditing")]
         public ActionResult Edit(CheckoutAttributeModel model, bool continueEditing)
         {
             if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageCatalog))
@@ -252,31 +261,29 @@ namespace SmartStore.Admin.Controllers
 
         #region Checkout attribute values
 
-        //list
         [HttpPost, GridAction(EnableCustomBinding = true)]
         public ActionResult ValueList(int checkoutAttributeId, GridCommand command)
         {
-            if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageCatalog))
-                return AccessDeniedView();
+			var model = new GridModel<CheckoutAttributeValueModel>();
 
-            var values = _checkoutAttributeService.GetCheckoutAttributeValues(checkoutAttributeId);
-            var gridModel = new GridModel<CheckoutAttributeValueModel>
+			if (_services.Permissions.Authorize(StandardPermissionProvider.ManageCatalog))
+			{
+				var values = _checkoutAttributeService.GetCheckoutAttributeValues(checkoutAttributeId);
+
+				model.Data = values.Select(x => x.ToModel());
+
+				model.Total = values.Count();
+			}
+			else
+			{
+				model.Data = Enumerable.Empty<CheckoutAttributeValueModel>();
+
+				NotifyAccessDenied();
+			}
+
+			return new JsonResult
             {
-                Data = values.Select(x => 
-                    {
-                        var model = x.ToModel();
-                        //locales
-                        //AddLocales(_languageService, model.Locales, (locale, languageId) =>
-                        //{
-                        //    locale.Name = x.GetLocalized(y => y.Name, languageId, false, false);
-                        //});
-                        return model;
-                    }),
-                Total = values.Count()
-            };
-            return new JsonResult
-            {
-                Data = gridModel
+                Data = model
             };
         }
 
@@ -382,21 +389,18 @@ namespace SmartStore.Admin.Controllers
             return View(model);
         }
 
-        //delete
         [GridAction(EnableCustomBinding = true)]
         public ActionResult ValueDelete(int valueId, int checkoutAttributeId, GridCommand command)
         {
-            if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageCatalog))
-                return AccessDeniedView();
+			if (_services.Permissions.Authorize(StandardPermissionProvider.ManageCatalog))
+			{
+				var cav = _checkoutAttributeService.GetCheckoutAttributeValueById(valueId);
 
-            var cav = _checkoutAttributeService.GetCheckoutAttributeValueById(valueId);
-            if (cav == null)
-                throw new ArgumentException("No checkout attribute value found with the specified id");
-            _checkoutAttributeService.DeleteCheckoutAttributeValue(cav);
+				_checkoutAttributeService.DeleteCheckoutAttributeValue(cav);
+			}
 
             return ValueList(checkoutAttributeId, command);
         }
-
 
         #endregion
     }

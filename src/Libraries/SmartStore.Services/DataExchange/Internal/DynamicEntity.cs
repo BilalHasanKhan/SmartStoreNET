@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using SmartStore.ComponentModel;
 
-namespace SmartStore.Services.DataExchange.Internal
+namespace SmartStore.Services.DataExchange.Export.Internal
 {
 	internal class DynamicEntity : HybridExpando
 	{
@@ -14,8 +14,7 @@ namespace SmartStore.Services.DataExchange.Internal
 		public DynamicEntity(object entity)
 			: base(entity)
 		{
-			// TODO: Umbenennen!!!
-			base.Properties["_Entity"] = entity;
+			base.Properties["Entity"] = entity;
 		}
 
 		public void Merge(string name, object value)

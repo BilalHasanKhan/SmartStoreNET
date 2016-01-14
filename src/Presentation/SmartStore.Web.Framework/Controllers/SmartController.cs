@@ -1,29 +1,45 @@
 ﻿using System;
+using System.Text;
+using System.Web;
 using System.Web.Mvc;
-using SmartStore.Core;
-using SmartStore.Core.Infrastructure;
 using SmartStore.Core.Localization;
 using SmartStore.Core.Logging;
+using SmartStore.Services;
+using SmartStore.Web.Framework.Filters;
+using SmartStore.Web.Framework.Localization;
+using SmartStore.Web.Framework.Modelling;
 
 namespace SmartStore.Web.Framework.Controllers
 {
 	[SetWorkingCulture]
 	[Notify]
+	[JsonNet]
 	public abstract partial class SmartController : Controller
 	{
-		private readonly Lazy<INotifier> _notifier;
-
 		protected SmartController()
 		{
 			this.Logger = NullLogger.Instance;
 			this.T = NullLocalizer.Instance;
-
-			this._notifier = EngineContext.Current.Resolve<Lazy<INotifier>>();
 		}
 
-		public ILogger Logger { get; set; }
-		public Localizer T { get; set; }
-		
+		public ILogger Logger
+		{
+			get;
+			set;
+		}
+
+		public Localizer T
+		{
+			get;
+			set;
+		}
+
+		public ICommonServices Services
+		{
+			get;
+			set;
+		}
+
 		/// <summary>
 		/// Pushes an info message to the notification queue
 		/// </summary>
@@ -31,7 +47,7 @@ namespace SmartStore.Web.Framework.Controllers
 		/// <param name="durable">A value indicating whether the message should be persisted for the next request</param>
 		protected virtual void NotifyInfo(string message, bool durable = true)
 		{
-			_notifier.Value.Information(message, durable);
+			Services.Notifier.Information(message, durable);
 		}
 
 		/// <summary>
@@ -41,7 +57,7 @@ namespace SmartStore.Web.Framework.Controllers
 		/// <param name="durable">A value indicating whether the message should be persisted for the next request</param>
 		protected virtual void NotifyWarning(string message, bool durable = true)
 		{
-			_notifier.Value.Warning(message, durable);
+			Services.Notifier.Warning(message, durable);
 		}
 
 		/// <summary>
@@ -51,7 +67,7 @@ namespace SmartStore.Web.Framework.Controllers
 		/// <param name="durable">A value indicating whether the message should be persisted for the next request</param>
 		protected virtual void NotifySuccess(string message, bool durable = true)
 		{
-			_notifier.Value.Success(message, durable);
+			Services.Notifier.Success(message, durable);
 		}
 
 		/// <summary>
@@ -61,7 +77,7 @@ namespace SmartStore.Web.Framework.Controllers
 		/// <param name="durable">A value indicating whether the message should be persisted for the next request</param>
 		protected virtual void NotifyError(string message, bool durable = true)
 		{
-			_notifier.Value.Error(message, durable);
+			Services.Notifier.Error(message, durable);
 		}
 
 		/// <summary>
@@ -77,7 +93,24 @@ namespace SmartStore.Web.Framework.Controllers
 				LogException(exception);
 			}
 
-			_notifier.Value.Error(exception.ToAllMessages(), durable);
+			Services.Notifier.Error(HttpUtility.HtmlEncode(exception.ToAllMessages()), durable);
+		}
+
+		/// <summary>
+		/// Pushes an error message to the notification queue that the access to a resource has been denied
+		/// </summary>
+		/// <param name="durable">A value indicating whether a message should be persisted for the next request</param>
+		/// <param name="log">A value indicating whether the message should be logged</param>
+		protected virtual void NotifyAccessDenied(bool durable = true, bool log = true)
+		{
+			var message = T("Admin.AccessDenied.Description");
+
+			if (log)
+			{
+				Logger.Error(message, null, Services.WorkContext.CurrentCustomer);
+			}
+
+			Services.Notifier.Error(message, durable);
 		}
 
 		protected virtual ActionResult RedirectToReferrer()
@@ -94,7 +127,7 @@ namespace SmartStore.Web.Framework.Controllers
 		{
 			string message = T("Common.RequestProcessingFailed", this.RouteData.Values["controller"], this.RouteData.Values["action"], reason.NaIfEmpty());
 
-			_notifier.Value.Error(message, durable);
+			Services.Notifier.Error(message, durable);
 
 			return RedirectToRoute("HomePage");
 		}
@@ -119,10 +152,31 @@ namespace SmartStore.Web.Framework.Controllers
 		/// <param name="exc">Exception</param>
 		private void LogException(Exception exc)
 		{
-			var workContext = EngineContext.Current.Resolve<IWorkContext>();
-
-			var customer = workContext.CurrentCustomer;
+			var customer = Services.WorkContext.CurrentCustomer;
 			Logger.Error(exc.Message, exc, customer);
 		}
+
+		///// <summary>
+		///// Creates a <see cref="JsonResult"/> object that serializes the specified object to JavaScript Object Notation (JSON) format using the content type, 
+		///// content encoding, and the JSON request behavior.
+		///// </summary>
+		///// <param name="data">The JavaScript object graph to serialize.</param>
+		///// <param name="contentType">The content type (MIME type).</param>
+		///// <param name="contentEncoding">The content encoding.</param>
+		///// <param name="behavior">The JSON request behavior</param>
+		///// <returns>The result object that serializes the specified object to JSON format.</returns>
+		///// <remarks>
+		///// This overridden method internally uses the Json.NET library for serialization.
+		///// </remarks>
+		//protected override JsonResult Json(object data, string contentType, Encoding contentEncoding, JsonRequestBehavior behavior)
+		//{
+		//	return new JsonNetResult(Services.DateTimeHelper)
+		//	{
+		//		Data = data,
+		//		ContentType = contentType,
+		//		ContentEncoding = contentEncoding,
+		//		JsonRequestBehavior = behavior
+		//	};
+		//}
 	}
 }
