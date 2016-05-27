@@ -30,7 +30,10 @@
             $("#@Html.FieldIdFor(model => model.ProductSearchAutoCompleteEnabled)").click(toggleProductSearchAutoComplete);
             $("#@Html.FieldIdFor(model => model.CompareProductsEnabled)").click(toggleCompareProducts);
         	$("#@Html.FieldIdFor(model => model.EnableHtmlTextCollapser)").click(toggleHtmlTextCollapsedHeight);
-        	$("#@Html.FieldIdFor(model => model.FilterEnabled)").click(toggleFilterEnabled);
+
+        	$("#@Html.FieldIdFor(model => model.FilterEnabled)").change(function () {
+        		$('#ProductFilterTable').find('.product-filter-option').toggle($(this).is(':checked'));
+        	}).trigger('change');
 
             toggleShowCategoryProductNumberIncludingSubcategories();
             toggleEmailAFriend();
@@ -43,7 +46,6 @@
             toggleProductSearchAutoComplete();
             toggleCompareProducts();
             toggleHtmlTextCollapsedHeight();
-            toggleFilterEnabled();
             toggleManufacturersOnHomepage();
         });
 
@@ -157,16 +159,6 @@
                 $('#pnlHtmlTextCollapsedHeight').hide();
             }
         }
-
-		function toggleFilterEnabled() {
-			if ($('#@Html.FieldIdFor(model => model.FilterEnabled)').is(':checked')) {
-				$('#pnlMaxFilterItemsToDisplay').show();
-				$('#pnlExpandAllFilterCriteria').show();
-			} else {
-				$('#pnlMaxFilterItemsToDisplay').hide();
-				$('#pnlExpandAllFilterCriteria').hide();
-			}
-		}
     </script>
 	
 	@Html.Action("StoreScopeConfiguration", "Setting")
@@ -332,6 +324,15 @@
         </tr>
 		<tr>
 			<td class="adminTitle">
+				@Html.SmartLabelFor(model => model.HideManufacturerDefaultPictures)
+			</td>
+			<td class="adminData">
+				@Html.SettingEditorFor(model => model.HideManufacturerDefaultPictures)
+				@Html.ValidationMessageFor(model => model.HideManufacturerDefaultPictures)
+			</td>
+		</tr>
+		<tr>
+			<td class="adminTitle">
 				@Html.SmartLabelFor(model => model.HideCategoryDefaultPictures)
 			</td>
 			<td class="adminData">
@@ -434,7 +435,26 @@
 				@Html.ValidationMessageFor(model => model.CategoryBreadcrumbEnabled)
 			</td>
 		</tr>
+		<tr>
+			<td class="adminTitle">
+				@Html.SmartLabelFor(model => model.SubCategoryDisplayType)
+			</td>
+			<td class="adminData">
+				@Html.SettingOverrideCheckbox(model => Model.SubCategoryDisplayType)
+				@Html.DropDownListFor(model => model.SubCategoryDisplayType, Model.AvailableSubCategoryDisplayTypes)
+				@Html.ValidationMessageFor(model => model.SubCategoryDisplayType)
+			</td>
+		</tr>
+	</table>
 
+	<table id="ProductFilterTable" class="adminContent">
+		<tr>
+			<td colspan="2">
+				<div class="admin-config-group">
+					<div class="title">@T("Filtering.FilterResults")</div>
+				</div>
+			</td>
+		</tr>
 		<tr>
 			<td class="adminTitle">
 				@Html.SmartLabelFor(model => model.FilterEnabled)
@@ -444,7 +464,7 @@
 				@Html.ValidationMessageFor(model => model.FilterEnabled)
 			</td>
 		</tr>
-		<tr id="pnlMaxFilterItemsToDisplay">
+		<tr class="product-filter-option">
 			<td class="adminTitle">
 				@Html.SmartLabelFor(model => model.MaxFilterItemsToDisplay)
 			</td>
@@ -453,7 +473,7 @@
 				@Html.ValidationMessageFor(model => model.MaxFilterItemsToDisplay)
 			</td>
 		</tr>
-		<tr id="pnlExpandAllFilterCriteria">
+		<tr class="product-filter-option">
 			<td class="adminTitle">
 				@Html.SmartLabelFor(model => model.ExpandAllFilterCriteria)
 			</td>
@@ -462,15 +482,13 @@
 				@Html.ValidationMessageFor(model => model.ExpandAllFilterCriteria)
 			</td>
 		</tr>
-
-		<tr>
+		<tr class="product-filter-option">
 			<td class="adminTitle">
-				@Html.SmartLabelFor(model => model.SubCategoryDisplayType)
+				@Html.SmartLabelFor(model => model.SortFilterResultsByMatches)
 			</td>
 			<td class="adminData">
-				@Html.SettingOverrideCheckbox(model => Model.SubCategoryDisplayType)
-				@Html.DropDownListFor(model => model.SubCategoryDisplayType, Model.AvailableSubCategoryDisplayTypes)
-				@Html.ValidationMessageFor(model => model.SubCategoryDisplayType)
+				@Html.SettingEditorFor(model => model.SortFilterResultsByMatches)
+				@Html.ValidationMessageFor(model => model.SortFilterResultsByMatches)
 			</td>
 		</tr>
 	</table>
@@ -797,6 +815,15 @@
                 @Html.ValidationMessageFor(model => model.DisplayAllImagesNumber)
             </td>
         </tr>
+		<tr>
+			<td class="adminTitle">
+				@Html.SmartLabelFor(model => model.ShowManufacturerPicturesInProductDetail)
+			</td>
+			<td class="adminData">
+				@Html.SettingEditorFor(model => model.ShowManufacturerPicturesInProductDetail)
+				@Html.ValidationMessageFor(model => model.ShowManufacturerPicturesInProductDetail)
+			</td>
+		</tr>
         <tr>
             <td class="adminTitle">
                 @Html.SmartLabelFor(model => model.ShowDeliveryTimesInProductDetail)
@@ -900,6 +927,15 @@
 			<td class="adminData">
 				@Html.SettingEditorFor(model => model.SuppressSkuSearch)
 				@Html.ValidationMessageFor(model => model.SuppressSkuSearch)
+			</td>
+		</tr>
+		<tr>
+			<td class="adminTitle">
+				@Html.SmartLabelFor(model => model.SearchDescriptions)
+			</td>
+			<td class="adminData">
+				@Html.SettingEditorFor(model => model.SearchDescriptions)
+				@Html.ValidationMessageFor(model => model.SearchDescriptions)
 			</td>
 		</tr>
 		<tr>

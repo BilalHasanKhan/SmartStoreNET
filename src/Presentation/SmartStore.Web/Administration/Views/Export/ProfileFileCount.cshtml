@@ -1,6 +1,9 @@
-﻿@using SmartStore.Admin.Models.DataExchange
-@model ExportProfileDetailsModel
-@{
-	Layout = null;
+﻿@model int
+@if (Model > 0)
+{
+	<a href="javascript:void(0)" class="export-file-count"><strong>@Model</strong></a>
 }
-<a href="javascript:void(0)" class="export-file-count">@Model.ExportFileCount</a>
+else
+{
+	<span title="@T("Common.NoFilesAvailable")">0</span>
+}

@@ -1,4 +1,7 @@
-﻿using SmartStore.PayPal.Settings;
+﻿using System.Collections.Generic;
+using System.Net;
+using System.Web.Mvc;
+using SmartStore.PayPal.Settings;
 using SmartStore.Web.Framework;
 using SmartStore.Web.Framework.Modelling;
 
@@ -6,8 +9,15 @@ namespace SmartStore.PayPal.Models
 {
     public class PayPalStandardConfigurationModel : ModelBase
 	{
-        [SmartResourceDisplayName("Plugins.Payments.PayPal.UseSandbox")]
+		[SmartResourceDisplayName("Plugins.Payments.PayPal.SecurityProtocol")]
+		public SecurityProtocolType? SecurityProtocol { get; set; }
+		public List<SelectListItem> AvailableSecurityProtocols { get; set; }
+
+		[SmartResourceDisplayName("Plugins.Payments.PayPal.UseSandbox")]
 		public bool UseSandbox { get; set; }
+
+		[SmartResourceDisplayName("Plugins.Payments.PayPal.IpnChangesPaymentStatus")]
+		public bool IpnChangesPaymentStatus { get; set; }
 
 		[SmartResourceDisplayName("Plugins.Payments.PayPalStandard.Fields.BusinessEmail")]
 		public string BusinessEmail { get; set; }
@@ -21,10 +31,10 @@ namespace SmartStore.PayPal.Models
 		[SmartResourceDisplayName("Plugins.Payments.PayPalStandard.Fields.PdtValidateOnlyWarn")]
 		public bool PdtValidateOnlyWarn { get; set; }
 
-		[SmartResourceDisplayName("Plugins.Payments.PayPalStandard.Fields.AdditionalFee")]
+		[SmartResourceDisplayName("Plugins.Payments.PayPal.AdditionalFee")]
 		public decimal AdditionalFee { get; set; }
 
-		[SmartResourceDisplayName("Plugins.Payments.PayPalStandard.Fields.AdditionalFeePercentage")]
+		[SmartResourceDisplayName("Plugins.Payments.PayPal.AdditionalFeePercentage")]
 		public bool AdditionalFeePercentage { get; set; }
 
 		[SmartResourceDisplayName("Plugins.Payments.PayPalStandard.Fields.PassProductNamesAndTotals")]
@@ -36,11 +46,13 @@ namespace SmartStore.PayPal.Models
 		[SmartResourceDisplayName("Plugins.Payments.PayPalStandard.Fields.IpnUrl")]
 		public string IpnUrl { get; set; }
 
-        public void Copy(PayPalStandardPaymentSettings settings, bool fromSettings)
+		public void Copy(PayPalStandardPaymentSettings settings, bool fromSettings)
         {
             if (fromSettings)
             {
+				SecurityProtocol = settings.SecurityProtocol;
                 UseSandbox = settings.UseSandbox;
+				IpnChangesPaymentStatus = settings.IpnChangesPaymentStatus;
                 BusinessEmail = settings.BusinessEmail;
                 PdtToken = settings.PdtToken;
                 PdtValidateOrderTotal = settings.PdtValidateOrderTotal;
@@ -53,7 +65,9 @@ namespace SmartStore.PayPal.Models
             }
             else
             {
+				settings.SecurityProtocol = SecurityProtocol;
                 settings.UseSandbox = UseSandbox;
+				settings.IpnChangesPaymentStatus = IpnChangesPaymentStatus;
                 settings.BusinessEmail = BusinessEmail;
                 settings.PdtToken = PdtToken;
                 settings.PdtValidateOrderTotal = PdtValidateOrderTotal;

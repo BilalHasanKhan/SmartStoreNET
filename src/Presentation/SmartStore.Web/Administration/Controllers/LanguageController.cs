@@ -68,7 +68,7 @@ namespace SmartStore.Admin.Controllers
 				.ToList();
 
 			var allCountryNames = _countryService.GetAllCountries(true)
-				.ToDictionary(x => x.TwoLetterIsoCode.EmptyNull().ToLower(), x => x.GetLocalized(y => y.Name, languageId, true, false));
+				.ToDictionarySafe(x => x.TwoLetterIsoCode.EmptyNull().ToLower(), x => x.GetLocalized(y => y.Name, languageId, true, false));
 
 			model.AvailableCultures = allCultures
 				.Select(x => new SelectListItem { Text = "{0} [{1}]".FormatInvariant(x.DisplayName, x.IetfLanguageTag), Value = x.IetfLanguageTag })
@@ -91,7 +91,10 @@ namespace SmartStore.Admin.Controllers
 						index == -1 ? item.DisplayName : item.DisplayName.Substring(0, index),
 						item.TwoLetterISOLanguageName);
 
-					model.AvailableTwoLetterLanguageCodes.Add(new SelectListItem { Text = displayName, Value = item.TwoLetterISOLanguageName });
+                    if (item.TwoLetterISOLanguageName.Length == 2)
+                    { 
+					    model.AvailableTwoLetterLanguageCodes.Add(new SelectListItem { Text = displayName, Value = item.TwoLetterISOLanguageName });
+                    }
 				}
 			}
 

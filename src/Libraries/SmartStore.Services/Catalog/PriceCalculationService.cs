@@ -756,12 +756,14 @@ namespace SmartStore.Services.Catalog
                 {
 					product.MergeWithCombination(shoppingCartItem.Item.AttributesXml, _productAttributeParser);
 
-					decimal attributesTotalPrice = decimal.Zero;
+					var attributesTotalPrice = decimal.Zero;
 
-					var pvaValues = _productAttributeParser.ParseProductVariantAttributeValues(shoppingCartItem.Item.AttributesXml);
+					var pvaValuesEnum = _productAttributeParser.ParseProductVariantAttributeValues(shoppingCartItem.Item.AttributesXml);
 
-					if (pvaValues != null)
+					if (pvaValuesEnum != null)
 					{
+						var pvaValues = pvaValuesEnum.ToList();
+
 						foreach (var pvaValue in pvaValues)
 						{
 							attributesTotalPrice += GetProductVariantAttributeValuePriceAdjustment(pvaValue);

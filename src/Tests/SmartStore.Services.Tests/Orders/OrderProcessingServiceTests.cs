@@ -82,12 +82,13 @@ namespace SmartStore.Services.Tests.Orders
         LocalizationSettings _localizationSettings;
         ShoppingCartSettings _shoppingCartSettings;
         CatalogSettings _catalogSettings;
-        IOrderProcessingService _orderProcessingService;
+		IOrderProcessingService _orderProcessingService;
         IEventPublisher _eventPublisher;
         CurrencySettings _currencySettings;
 		IAffiliateService _affiliateService;
 		ISettingService _settingService;
 		IDownloadService _downloadService;
+		INewsLetterSubscriptionService _newsLetterSubscriptionService;
 		ICommonServices _services;
 		HttpRequestBase _httpRequestBase;
 		IGeoCountryLookup _geoCountryLookup;
@@ -135,7 +136,6 @@ namespace SmartStore.Services.Tests.Orders
 				_productService,
                 _checkoutAttributeParser,
 				_genericAttributeService,
-                _localizationService,
                 _shippingSettings,
 				_eventPublisher,
 				_shoppingCartSettings,
@@ -189,8 +189,9 @@ namespace SmartStore.Services.Tests.Orders
             _customerActivityService = MockRepository.GenerateMock<ICustomerActivityService>();
             _currencyService = MockRepository.GenerateMock<ICurrencyService>();
 			_affiliateService = MockRepository.GenerateMock<IAffiliateService>();
+			_newsLetterSubscriptionService = MockRepository.GenerateMock<INewsLetterSubscriptionService>();
 
-            _paymentSettings = new PaymentSettings()
+			_paymentSettings = new PaymentSettings()
             {
                 ActivePaymentMethodSystemNames = new List<string>()
                 {
@@ -217,6 +218,7 @@ namespace SmartStore.Services.Tests.Orders
                 _encryptionService, _workContext, _storeContext, _workflowMessageService,
                 _customerActivityService, _currencyService, _affiliateService,
                 _eventPublisher, _genericAttributeService,
+				_newsLetterSubscriptionService,
 				_paymentSettings, _rewardPointsSettings,
                 _orderSettings, _taxSettings, _localizationSettings,
                 _currencySettings, _shoppingCartSettings);

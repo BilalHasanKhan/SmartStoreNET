@@ -1,20 +1,23 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Mime;
+using System.Text;
 using System.Web.Mvc;
 using SmartStore.Admin.Extensions;
 using SmartStore.Admin.Models.DataExchange;
+using SmartStore.Core;
 using SmartStore.Core.Domain;
 using SmartStore.Core.Domain.DataExchange;
 using SmartStore.Core.IO;
-using SmartStore.Core.Localization;
-using SmartStore.Services;
+using SmartStore.Services.Catalog.Importer;
+using SmartStore.Services.Customers.Importer;
 using SmartStore.Services.DataExchange.Csv;
 using SmartStore.Services.DataExchange.Import;
 using SmartStore.Services.Helpers;
 using SmartStore.Services.Localization;
+using SmartStore.Services.Messages.Importer;
 using SmartStore.Services.Security;
 using SmartStore.Services.Tasks;
 using SmartStore.Utilities;
@@ -28,21 +31,18 @@ namespace SmartStore.Admin.Controllers
 	[AdminAuthorize]
 	public class ImportController : AdminControllerBase
 	{
-		private readonly ICommonServices _services;
-		private readonly IImportProfileService _importService;
+		private readonly IImportProfileService _importProfileService;
 		private readonly IDateTimeHelper _dateTimeHelper;
 		private readonly ITaskScheduler _taskScheduler;
 		private readonly ILanguageService _languageService;
 
 		public ImportController(
-			ICommonServices services,
 			IImportProfileService importService,
 			IDateTimeHelper dateTimeHelper,
 			ITaskScheduler taskScheduler,
 			ILanguageService languageService)
 		{
-			_services = services;
-			_importService = importService;
+			_importProfileService = importService;
 			_dateTimeHelper = dateTimeHelper;
 			_taskScheduler = taskScheduler;
 			_languageService = languageService;
@@ -50,30 +50,204 @@ namespace SmartStore.Admin.Controllers
 
 		#region Utilities
 
-		private void PrepareColumnMappingModels(ImportProfile profile, ImportProfileModel model, CsvConfiguration csvConfiguration, ColumnMap invalidMap = null)
+		private bool IsValidImportFile(string path, out string error)
 		{
-			model.ColumnMappings = new List<ColumnMappingItemModel>();
-			model.AvailableEntityProperties = new List<SelectListItem>();
+			error = null;
 
 			try
 			{
+				using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+				{
+					var unused = LightweightDataTable.FromFile(path, stream, stream.Length, CsvConfiguration.ExcelFriendlyConfiguration, 0, 1);
+				}
+
+				return true;
+			}
+			catch (Exception exception)
+			{
+				error = exception.ToAllMessages();
+
+				FileSystemHelper.Delete(path);
+
+				return false;
+			}
+		}
+
+		private bool IsDefaultValueDisabled(string column, string property, string[] disabledFieldNames)
+		{
+			if (disabledFieldNames.Contains(property))
+				return true;
+
+			string columnWithoutIndex, columnIndex;
+			if (ColumnMap.ParseSourceName(property, out columnWithoutIndex, out columnIndex))
+				return disabledFieldNames.Contains(columnWithoutIndex);
+
+			return false;
+		}
+
+		private string[] GetDisabledDefaultFieldNames(ImportProfile profile)
+		{
+			switch (profile.EntityType)
+			{
+				case ImportEntityType.Product:
+					return new string[] { "Name", "Sku", "ManufacturerPartNumber", "Gtin", "SeName" };
+				case ImportEntityType.Category:
+					return new string[] { "Name", "SeName" };
+				case ImportEntityType.Customer:
+					return new string[] { "CustomerGuid", "Email" };
+				case ImportEntityType.NewsLetterSubscription:
+					return new string[] { "Email" };
+				default:
+					return new string[0];
+			}
+		}
+
+		private string GetPropertyDescription(Dictionary<string, string> allProperties, string property)
+		{
+			if (property.HasValue() && allProperties.ContainsKey(property))
+			{
+				var result = allProperties[property];
+				if (result.HasValue())
+					return result;
+			}
+			return property;
+		}
+
+		private void PrepareProfileModel(ImportProfileModel model, ImportProfile profile, bool forEdit, ColumnMap invalidMap = null)
+		{
+			model.Id = profile.Id;
+			model.Name = profile.Name;
+			model.EntityType = profile.EntityType;
+			model.Enabled = profile.Enabled;
+			model.Skip = (profile.Skip == 0 ? (int?)null : profile.Skip);
+			model.Take = (profile.Take == 0 ? (int?)null : profile.Take);
+			model.UpdateOnly = profile.UpdateOnly;
+			model.KeyFieldNames = profile.KeyFieldNames.SplitSafe(",").Distinct().ToArray();
+			model.ScheduleTaskId = profile.SchedulingTaskId;
+			model.ScheduleTaskName = profile.ScheduleTask.Name.NaIfEmpty();
+			model.IsTaskRunning = profile.ScheduleTask.IsRunning;
+			model.IsTaskEnabled = profile.ScheduleTask.Enabled;
+			model.LogFileExists = System.IO.File.Exists(profile.GetImportLogPath());
+			model.EntityTypeName = profile.EntityType.GetLocalizedEnum(Services.Localization, Services.WorkContext);
+
+			model.ExistingFileNames = profile.GetImportFiles()
+				.Select(x => Path.GetFileName(x))
+				.ToList();
+
+			if (profile.ResultInfo.HasValue())
+				model.ImportResult = XmlHelper.Deserialize<SerializableImportResult>(profile.ResultInfo);
+
+			if (!forEdit)
+				return;
+
+			CsvConfiguration csvConfiguration = null;
+
+			if (profile.FileType == ImportFileType.CSV)
+			{
+				var csvConverter = new CsvConfigurationConverter();
+				csvConfiguration = csvConverter.ConvertFrom<CsvConfiguration>(profile.FileTypeConfiguration) ?? CsvConfiguration.ExcelFriendlyConfiguration;
+
+				model.CsvConfiguration = new CsvConfigurationModel(csvConfiguration);
+			}
+			else
+			{
+				csvConfiguration = CsvConfiguration.ExcelFriendlyConfiguration;
+			}
+
+			// common configuration
+			var extraData = XmlHelper.Deserialize<ImportExtraData>(profile.ExtraData);
+			model.ExtraData.NumberOfPictures = extraData.NumberOfPictures;
+
+			// column mapping
+			model.AvailableSourceColumns = new List<ColumnMappingItemModel>();
+			model.AvailableEntityProperties = new List<ColumnMappingItemModel>();
+			model.AvailableKeyFieldNames = new List<SelectListItem>();
+			model.ColumnMappings = new List<ColumnMappingItemModel>();
+
+			try
+			{
+				string[] availableKeyFieldNames = null;
+				string[] disabledDefaultFieldNames = GetDisabledDefaultFieldNames(profile);
+				var mapConverter = new ColumnMapConverter();
+				var storedMap = mapConverter.ConvertFrom<ColumnMap>(profile.ColumnMapping);
+				var map = (invalidMap ?? storedMap) ?? new ColumnMap();
+
+				// property name to localized property name
+				var allProperties = _importProfileService.GetImportableEntityProperties(profile.EntityType);
+
+				switch (profile.EntityType)
+				{
+					case ImportEntityType.Product:
+						availableKeyFieldNames = ProductImporter.SupportedKeyFields;
+						break;
+					case ImportEntityType.Category:
+						availableKeyFieldNames = CategoryImporter.SupportedKeyFields;
+						break;
+					case ImportEntityType.Customer:
+						availableKeyFieldNames = CustomerImporter.SupportedKeyFields;
+						break;
+					case ImportEntityType.NewsLetterSubscription:
+						availableKeyFieldNames = NewsLetterSubscriptionImporter.SupportedKeyFields;
+						break;
+				}
+
+				model.AvailableEntityProperties = allProperties
+					.Select(x =>
+					{
+						var mapping = new ColumnMappingItemModel
+						{
+							Property = x.Key,
+							PropertyDescription = x.Value,
+							IsDefaultDisabled = IsDefaultValueDisabled(x.Key, x.Key, disabledDefaultFieldNames)
+						};
+
+						return mapping;
+					})
+					.ToList();
+
+				model.AvailableKeyFieldNames = availableKeyFieldNames
+					.Select(x =>
+					{
+						var item = new SelectListItem { Value = x, Text = x };
+
+						if (x == "Id")
+							item.Text = T("Admin.Common.Entity.Fields.Id");
+						else if (allProperties.ContainsKey(x))
+							item.Text = allProperties[x];
+
+						return item;
+					})
+					.ToList();
+
+				model.ColumnMappings = map.Mappings
+					.Select(x =>
+					{
+						var mapping = new ColumnMappingItemModel
+						{
+							Column = x.Value.MappedName,
+							Property = x.Key,
+							Default = x.Value.Default
+						};
+
+						if (x.Value.IgnoreProperty)
+						{
+							// explicitly ignore the property
+							mapping.Column = null;
+							mapping.Default = null;
+						}
+
+						mapping.PropertyDescription = GetPropertyDescription(allProperties, mapping.Property);
+						mapping.IsDefaultDisabled = IsDefaultValueDisabled(mapping.Column, mapping.Property, disabledDefaultFieldNames);
+
+						return mapping;
+					})
+					.ToList();
+
 				var files = profile.GetImportFiles();
 				if (!files.Any())
 					return;
 
 				var filePath = files.First();
-				var mapConverter = new ColumnMapConverter();
-				var allLanguages = _languageService.GetAllLanguages(true);
-
-				var map = (invalidMap != null ? invalidMap : mapConverter.ConvertFrom<ColumnMap>(profile.ColumnMapping));
-				var hasMappings = (map != null && map.Mappings.Any());
-
-				var destProperties = _importService.GetImportableEntityProperties(profile.EntityType);
-
-				model.AvailableEntityProperties = destProperties
-					.Select(x => new SelectListItem { Value = x.Key, Text = x.Value	})
-					.OrderBy(x => x.Text)
-					.ToList();
 
 				using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
 				{
@@ -81,102 +255,58 @@ namespace SmartStore.Admin.Controllers
 
 					foreach (var column in dataTable.Columns.Where(x => x.Name.HasValue()))
 					{
-						string columnWithoutIndex;
-						string columnIndex;
-						ColumnMap.ParseSourceColumn(column.Name, out columnWithoutIndex, out columnIndex);
+						string columnWithoutIndex, columnIndex;
+						ColumnMap.ParseSourceName(column.Name, out columnWithoutIndex, out columnIndex);
 
-						var mapModel = new ColumnMappingItemModel
+						model.AvailableSourceColumns.Add(new ColumnMappingItemModel
 						{
 							Index = dataTable.Columns.IndexOf(column),
 							Column = column.Name,
 							ColumnWithoutIndex = columnWithoutIndex,
-							ColumnIndex = columnIndex
-						};
+							ColumnIndex = columnIndex,
+							PropertyDescription = GetPropertyDescription(allProperties, column.Name)
+						});
 
-						if (destProperties.ContainsKey(column.Name))
+						// auto map where field equals property name
+						if (!model.ColumnMappings.Any(x => x.Column == column.Name))
 						{
-							mapModel.ColumnLocalized = destProperties[column.Name];
-						}
-
-						if (columnIndex.HasValue())
-						{
-							var language = allLanguages.FirstOrDefault(x => x.UniqueSeoCode.IsCaseInsensitiveEqual(columnIndex));
-							if (language != null)
+							var kvp = allProperties.FirstOrDefault(x => x.Key.IsCaseInsensitiveEqual(column.Name));
+							if (kvp.Key.IsEmpty())
 							{
-								mapModel.LanguageDescription = LocalizationHelper.GetLanguageNativeName(language.LanguageCulture);
-								mapModel.FlagImageFileName = language.FlagImageFileName;
+								var alternativeName = LightweightDataTable.GetAlternativeColumnNameFor(column.Name);
+								kvp = allProperties.FirstOrDefault(x => x.Key.IsCaseInsensitiveEqual(alternativeName));
+							}
+
+							if (kvp.Key.HasValue() && !model.ColumnMappings.Any(x => x.Property == kvp.Key))
+							{
+								model.ColumnMappings.Add(new ColumnMappingItemModel
+								{
+									Column = column.Name,
+									Property = kvp.Key,
+									PropertyDescription = kvp.Value,
+									IsDefaultDisabled = IsDefaultValueDisabled(column.Name, kvp.Key, disabledDefaultFieldNames)
+								});
 							}
 						}
-
-						if (hasMappings)
-						{
-							var mapping = map.Mappings.FirstOrDefault(x => x.Key == column.Name);
-							if (mapping.Value != null)
-							{
-								mapModel.Property = mapping.Value.Property;
-								mapModel.Default = mapping.Value.Default;
-								mapModel.IsNilProperty = mapping.Value.Property.IsEmpty();
-							}
-						}
-
-						model.ColumnMappings.Add(mapModel);
 					}
+
+					// sorting
+					model.AvailableSourceColumns = model.AvailableSourceColumns
+						.OrderBy(x => x.PropertyDescription)
+						.ToList();
+
+					model.AvailableEntityProperties = model.AvailableEntityProperties
+						.OrderBy(x => x.PropertyDescription)
+						.ToList();
+
+					model.ColumnMappings = model.ColumnMappings
+						.OrderBy(x => x.PropertyDescription)
+						.ToList();
 				}
 			}
 			catch (Exception exception)
 			{
 				NotifyError(exception, true, false);
-			}
-		}
-
-		private void PrepareProfileModel(ImportProfileModel model, ImportProfile profile, bool forEdit, ColumnMap invalidMap = null)
-		{
-			if (forEdit)
-			{
-				model.AvailableEntityTypes = ImportEntityType.Product.ToSelectList(false).ToList();
-				model.AvailableFileTypes = ImportFileType.CSV.ToSelectList(false).ToList();
-			}
-
-			if (profile != null)
-			{
-				model.Id = profile.Id;
-				model.Name = profile.Name;
-				model.FileType = profile.FileType;
-				model.EntityType = profile.EntityType;
-				model.Enabled = profile.Enabled;
-				model.Skip = profile.Skip;
-				model.Take = profile.Take;
-				model.ScheduleTaskId = profile.SchedulingTaskId;
-				model.ScheduleTaskName = profile.ScheduleTask.Name.NaIfEmpty();
-				model.IsTaskRunning = profile.ScheduleTask.IsRunning;
-				model.IsTaskEnabled = profile.ScheduleTask.Enabled;
-				model.LogFileExists = System.IO.File.Exists(profile.GetImportLogPath());
-				model.EntityTypeName = profile.EntityType.GetLocalizedEnum(_services.Localization, _services.WorkContext);
-				model.UnspecifiedString = T("Common.Unspecified");
-
-				model.ExistingFileNames = profile.GetImportFiles()
-					.Select(x => Path.GetFileName(x))
-					.ToList();
-
-				if (forEdit)
-				{
-					CsvConfiguration csvConfiguration = null;
-
-					if (profile.FileType == ImportFileType.CSV)
-					{
-						var csvConverter = new CsvConfigurationConverter();
-						csvConfiguration = csvConverter.ConvertFrom<CsvConfiguration>(profile.FileTypeConfiguration) ?? CsvConfiguration.ExcelFriendlyConfiguration;
-
-						model.CsvConfiguration = new CsvConfigurationModel(csvConfiguration);
-					}
-
-					PrepareColumnMappingModels(profile, model, csvConfiguration ?? CsvConfiguration.ExcelFriendlyConfiguration, invalidMap);
-				}
-			}
-			else
-			{
-				model.Name = model.EntityType.GetLocalizedEnum(_services.Localization, _services.WorkContext);
-				model.ExistingFileNames = new List<string>();
 			}
 		}
 
@@ -189,11 +319,16 @@ namespace SmartStore.Admin.Controllers
 
 		public ActionResult List()
 		{
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
+			if (!Services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
 				return AccessDeniedView();
 
-			var profiles = _importService.GetImportProfiles().ToList();
-			var model = new List<ImportProfileModel>();
+			var model = new ImportProfileListModel
+			{
+				Profiles = new List<ImportProfileModel>(),
+				AvailableEntityTypes = ImportEntityType.Product.ToSelectList(false).ToList()
+			};
+
+			var profiles = _importProfileService.GetImportProfiles().ToList();
 
 			foreach (var profile in profiles)
 			{
@@ -201,40 +336,45 @@ namespace SmartStore.Admin.Controllers
 
 				PrepareProfileModel(profileModel, profile, false);
 
-				profileModel.TaskModel = profile.ScheduleTask.ToScheduleTaskModel(_services.Localization, _dateTimeHelper, Url);
+				profileModel.TaskModel = profile.ScheduleTask.ToScheduleTaskModel(Services.Localization, _dateTimeHelper, Url);
 
-				model.Add(profileModel);
+				model.Profiles.Add(profileModel);
 			}
 
 			return View(model);
 		}
 
-		public ActionResult Create()
+		public ActionResult ProfileListDetails(int profileId)
 		{
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
-				return AccessDeniedView();
+			if (Services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
+			{
+				var profile = _importProfileService.GetImportProfileById(profileId);
+				if (profile != null)
+				{
+					var importResult = XmlHelper.Deserialize<SerializableImportResult>(profile.ResultInfo);
 
-			var model = new ImportProfileModel();
-			PrepareProfileModel(model, null, true);
+					return Json(new
+					{
+						importResult = this.RenderPartialViewToString("ProfileImportResult", importResult)
+					},
+					JsonRequestBehavior.AllowGet);
+				}
+			}
 
-			return View(model);
+			return new EmptyResult();
 		}
 
-		[HttpPost, ParameterBasedOnFormName("save-continue", "continueEditing"), FormValueRequired("save", "save-continue")]
+		[HttpPost]
 		public ActionResult Create(ImportProfileModel model)
 		{
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
+			if (!Services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
 				return AccessDeniedView();
 
 			var importFile = Path.Combine(FileSystemHelper.TempDir(), model.TempFileName.EmptyNull());
 
-			if (!System.IO.File.Exists(importFile))
+			if (System.IO.File.Exists(importFile))
 			{
-				ModelState.AddModelError("", T("Admin.DataExchange.Import.MissingImportFile"));
-			}
-			else if (ModelState.IsValid)
-			{
-				var profile = _importService.InsertImportProfile(model.TempFileName, model.Name, model.EntityType);
+				var profile = _importProfileService.InsertImportProfile(model.TempFileName, model.Name, model.EntityType);
 
 				if (profile != null && profile.Id != 0)
 				{
@@ -245,17 +385,20 @@ namespace SmartStore.Admin.Controllers
 					return RedirectToAction("Edit", new { id = profile.Id });
 				}
 			}
+			else
+			{
+				NotifyError(T("Admin.DataExchange.Import.MissingImportFile"));
+			}
 
-			PrepareProfileModel(model, null, true);
-			return View(model);
+			return RedirectToAction("List");
 		}
 
 		public ActionResult Edit(int id)
 		{
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
+			if (!Services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
 				return AccessDeniedView();
 
-			var profile = _importService.GetImportProfileById(id);
+			var profile = _importProfileService.GetImportProfileById(id);
 			if (profile == null)
 				return RedirectToAction("List");
 
@@ -269,98 +412,140 @@ namespace SmartStore.Admin.Controllers
 		[FormValueRequired("save", "save-continue")]
 		public ActionResult Edit(ImportProfileModel model, bool continueEditing, FormCollection form)
 		{
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
+			if (!Services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
 				return AccessDeniedView();
 
-			var profile = _importService.GetImportProfileById(model.Id);
+			var profile = _importProfileService.GetImportProfileById(model.Id);
 			if (profile == null)
 				return RedirectToAction("List");
 
 			var map = new ColumnMap();
-			var mapConverter = new ColumnMapConverter();
-			var filePath = profile.GetImportFiles().First();
+			var hasErrors = false;
+			var resetMappings = false;
 
-			CsvConfiguration csvConfig = null;
-			if (model.CsvConfiguration != null)
+			try
 			{
-				csvConfig = model.CsvConfiguration.Clone();
-			}
+				var propertyKeyPrefix = "ColumnMapping.Property.";
+				var allPropertyKeys = form.AllKeys.Where(x => x.HasValue() && x.StartsWith(propertyKeyPrefix));
 
-			using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-			{
-				var dataTable = LightweightDataTable.FromFile(Path.GetFileName(filePath), stream, stream.Length, csvConfig ?? CsvConfiguration.ExcelFriendlyConfiguration, 0, 1);
-
-				foreach (var column in dataTable.Columns.Where(x => x.Name.HasValue()))
+				if (allPropertyKeys.Any())
 				{
-					var index = dataTable.Columns.IndexOf(column);
-					var key = "ColumnMapping.Property." + index.ToString();
+					var entityProperties = _importProfileService.GetImportableEntityProperties(profile.EntityType);
 
-					if (form.AllKeys.Contains(key))
+					foreach (var key in allPropertyKeys)
 					{
-						// allow to nil an entity property name to explicitly ignore a column
-						var entityProperty = form[key];
-						var defaultValue = form["ColumnMapping.Default." + index.ToString()];
+						var index = key.Substring(propertyKeyPrefix.Length);
+						var property = form[key];
+						var column = form["ColumnMapping.Column." + index];
+						var defaultValue = form["ColumnMapping.Default." + index];
 
-						map.AddMapping(column.Name, null, entityProperty, defaultValue);
-					}
-				}
+						if (column.IsEmpty())
+						{
+							// tell mapper to explicitly ignore the property
+							map.AddMapping(property, null, property, "[IGNOREPROPERTY]");
+						}
+						else if (!column.IsCaseInsensitiveEqual(property) || defaultValue.HasValue())
+						{
+							if (defaultValue.HasValue() && GetDisabledDefaultFieldNames(profile).Contains(property))
+								defaultValue = null;
 
-				// add model state error for invalid mappings
-				foreach (var invalidMapping in map.GetInvalidMappings())
-				{
-					// do not mark columns as invalid where column name equals entity property name
-					if (invalidMapping.Key != invalidMapping.Value.Property)
-					{
-						var column = dataTable.Columns.First(x => x.Name == invalidMapping.Key);
-						var index = dataTable.Columns.IndexOf(column);
-						var key = "ColumnMapping.Property." + index.ToString();
-
-						ModelState.AddModelError(key, T("Admin.DataExchange.ColumnMapping.Validate.EntityMultipleMapped", invalidMapping.Value.Property));
+							map.AddMapping(property, null, column, defaultValue);
+						}
 					}
 				}
 			}
-
-			if (ModelState.IsValid)
+			catch (Exception exception)
 			{
-				profile.Name = model.Name;
-				profile.EntityType = model.EntityType;
-				profile.Enabled = model.Enabled;
-				profile.Skip = model.Skip;
-				profile.Take = model.Take;
-				profile.FileTypeConfiguration = null;
+				hasErrors = true;
+				NotifyError(exception, true, false);
+			}
 
-				profile.ColumnMapping = mapConverter.ConvertTo(map);
+			if (!ModelState.IsValid || hasErrors)
+			{
+				PrepareProfileModel(model, profile, true, map);
+				return View(model);
+			}
 
-				if (profile.FileType == ImportFileType.CSV && csvConfig != null)
+			profile.Name = model.Name;
+			profile.EntityType = model.EntityType;
+			profile.Enabled = model.Enabled;
+			profile.Skip = model.Skip ?? 0;
+			profile.Take = model.Take ?? 0;
+			profile.UpdateOnly = model.UpdateOnly;
+			profile.KeyFieldNames = (model.KeyFieldNames == null ? null : string.Join(",", model.KeyFieldNames));
+
+			try
+			{
+				if (profile.FileType == ImportFileType.CSV && model.CsvConfiguration != null)
 				{
 					var csvConverter = new CsvConfigurationConverter();
-					profile.FileTypeConfiguration = csvConverter.ConvertTo(csvConfig);
+
+					var oldCsvConfig = csvConverter.ConvertFrom<CsvConfiguration>(profile.FileTypeConfiguration);
+					var oldDelimiter = (oldCsvConfig != null ? oldCsvConfig.Delimiter.ToString() : null);
+
+					// auto reset mappings cause they are invalid. note: delimiter can be whitespaced, so no oldDelimter.HasValue() etc.
+					resetMappings = (oldDelimiter != model.CsvConfiguration.Delimiter && profile.ColumnMapping.HasValue());
+
+					profile.FileTypeConfiguration = csvConverter.ConvertTo(model.CsvConfiguration.Clone());
+				}
+				else
+				{
+					profile.FileTypeConfiguration = null;
 				}
 
-				_importService.UpdateImportProfile(profile);
+				if (resetMappings)
+				{
+					profile.ColumnMapping = null;
+				}
+				else
+				{
+					var mapConverter = new ColumnMapConverter();
+					profile.ColumnMapping = mapConverter.ConvertTo(map);
+				}
+
+				if (model.ExtraData != null)
+				{
+					var extraData = new ImportExtraData
+					{
+						NumberOfPictures = model.ExtraData.NumberOfPictures
+					};
+
+					profile.ExtraData = XmlHelper.Serialize(extraData);
+				}
+			}
+			catch (Exception exception)
+			{
+				hasErrors = true;
+				NotifyError(exception, true, false);
+			}
+
+			if (!hasErrors)
+			{
+				_importProfileService.UpdateImportProfile(profile);
 
 				NotifySuccess(T("Admin.Common.DataSuccessfullySaved"));
 
-				return (continueEditing ? RedirectToAction("Edit", new { id = profile.Id }) : RedirectToAction("List"));
+				if (resetMappings)
+				{
+					NotifyWarning(T("Admin.DataExchange.ColumnMapping.Validate.MappingsReset"));
+				}
 			}
 
-			PrepareProfileModel(model, profile, true, map);
-
-			return View(model);
+			return (continueEditing ? RedirectToAction("Edit", new { id = profile.Id }) : RedirectToAction("List"));
 		}
 
 		[HttpPost]
 		public ActionResult ResetColumnMappings(int id)
 		{
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
+			if (!Services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
 				return AccessDeniedView();
 
-			var profile = _importService.GetImportProfileById(id);
+			var profile = _importProfileService.GetImportProfileById(id);
 			if (profile == null)
 				return RedirectToAction("List");
 
 			profile.ColumnMapping = null;
-			_importService.UpdateImportProfile(profile);
+			_importProfileService.UpdateImportProfile(profile);
 
 			NotifySuccess(T("Admin.Common.TaskSuccessfullyProcessed"));
 
@@ -370,16 +555,16 @@ namespace SmartStore.Admin.Controllers
 		[HttpPost, ActionName("Delete")]
 		public ActionResult DeleteConfirmed(int id)
 		{
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
+			if (!Services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
 				return AccessDeniedView();
 
-			var profile = _importService.GetImportProfileById(id);
+			var profile = _importProfileService.GetImportProfileById(id);
 			if (profile == null)
 				return RedirectToAction("List");
 
 			try
 			{
-				_importService.DeleteImportProfile(profile);
+				_importProfileService.DeleteImportProfile(profile);
 
 				NotifySuccess(T("Admin.Common.TaskSuccessfullyProcessed"));
 
@@ -400,7 +585,7 @@ namespace SmartStore.Admin.Controllers
 			string error = null;
 			string tempFile = "";
 
-			if (_services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
+			if (Services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
 			{
 				var postedFile = Request.ToPostedFileResult();
 				if (postedFile != null)
@@ -411,13 +596,16 @@ namespace SmartStore.Admin.Controllers
 						FileSystemHelper.Delete(path);
 
 						success = postedFile.Stream.ToFile(path);
-
 						if (success)
-							tempFile = postedFile.FileName;
+						{
+							success = IsValidImportFile(path, out error);
+							if (success)
+								tempFile = postedFile.FileName;
+						}
 					}
 					else
 					{
-						var profile = _importService.GetImportProfileById(id);
+						var profile = _importProfileService.GetImportProfileById(id);
 						if (profile != null)
 						{
 							var files = profile.GetImportFiles();
@@ -432,9 +620,23 @@ namespace SmartStore.Admin.Controllers
 							if (!error.HasValue())
 							{
 								var folder = profile.GetImportFolder(true, true);
-								var destFile = Path.Combine(folder, Path.GetFileName(postedFile.FileName));
+								var fileName = Path.GetFileName(postedFile.FileName);
+								var path = Path.Combine(folder, fileName);
 
-								success = postedFile.Stream.ToFile(destFile);
+								success = postedFile.Stream.ToFile(path);
+								if (success)
+								{
+									success = IsValidImportFile(path, out error);
+									if (success)
+									{
+										var fileType = (Path.GetExtension(fileName).IsCaseInsensitiveEqual(".xlsx") ? ImportFileType.XLSX : ImportFileType.CSV);
+										if (fileType != profile.FileType)
+										{
+											profile.FileType = fileType;
+											_importProfileService.UpdateImportProfile(profile);
+										}
+									}
+								}
 							}
 						}
 					}
@@ -451,7 +653,7 @@ namespace SmartStore.Admin.Controllers
 			if (error.HasValue())
 				NotifyError(error);
 
-			return Json(new { success = success, tempFile = tempFile });
+			return Json(new { success = success, tempFile = tempFile, error = error });
 		}
 
 		[HttpPost]
@@ -459,68 +661,106 @@ namespace SmartStore.Admin.Controllers
 		{
 			// permissions checked internally by DataImporter
 
-			var profile = _importService.GetImportProfileById(id);
+			var profile = _importProfileService.GetImportProfileById(id);
 			if (profile == null)
 				return RedirectToAction("List");
 
 			var taskParams = new Dictionary<string, string>();
-			taskParams.Add("CurrentCustomerId", _services.WorkContext.CurrentCustomer.Id.ToString());
+			taskParams.Add(TaskExecutor.CurrentCustomerIdParamName, Services.WorkContext.CurrentCustomer.Id.ToString());
 
 			_taskScheduler.RunSingleTask(profile.SchedulingTaskId, taskParams);
 
-			NotifyInfo(T("Admin.System.ScheduleTasks.RunNow.Progress"));
+			NotifyInfo(T("Admin.System.ScheduleTasks.RunNow.Progress.DataImportTask"));
+
+			var referrer = Services.WebHelper.GetUrlReferrer();
+			if (referrer.HasValue())
+				return Redirect(referrer);
 
 			return RedirectToAction("List");
 		}
 
 		public ActionResult DownloadLogFile(int id)
 		{
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
+			if (!Services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
 				return AccessDeniedView();
 
-			var profile = _importService.GetImportProfileById(id);
-			if (profile == null)
-				return RedirectToAction("List");
+			var profile = _importProfileService.GetImportProfileById(id);
+			if (profile != null)
+			{
+				var path = profile.GetImportLogPath();
+				if (System.IO.File.Exists(path))
+				{
+					try
+					{
+						var stream = new FileStream(path, FileMode.Open);
+						var result = new FileStreamResult(stream, MediaTypeNames.Text.Plain);
 
-			var path = profile.GetImportLogPath();
-			var stream = new FileStream(path, FileMode.Open);
+						return result;
+					}
+					catch (IOException)
+					{
+						NotifyWarning(T("Admin.Common.FileInUse"));
+					}
+				}
+			}
 
-			var result = new FileStreamResult(stream, "text/plain; charset=utf-8");
-			result.FileDownloadName = profile.Name.ToValidFileName() + "-log.txt";
-
-			return result;
+			return RedirectToAction("List");
 		}
 
 		public ActionResult DownloadImportFile(int id, string name)
 		{
-			if (!_services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
-				return AccessDeniedView();
+			string message = null;
 
-			var profile = _importService.GetImportProfileById(id);
-			if (profile == null)
-				return RedirectToAction("List");
+			if (Services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
+			{
+				var profile = _importProfileService.GetImportProfileById(id);
+				if (profile != null)
+				{
+					var path = Path.Combine(profile.GetImportFolder(true), name);
 
-			var path = Path.Combine(profile.GetImportFolder(true), name);
+					if (!System.IO.File.Exists(path))
+						path = Path.Combine(profile.GetImportFolder(false), name);
 
-			if (!System.IO.File.Exists(path))
-				path = Path.Combine(profile.GetImportFolder(false), name);
+					if (System.IO.File.Exists(path))
+					{
+						try
+						{
+							var stream = new FileStream(path, FileMode.Open);
 
-			var stream = new FileStream(path, FileMode.Open);
+							var result = new FileStreamResult(stream, MimeTypes.MapNameToMimeType(path));
+							result.FileDownloadName = Path.GetFileName(path);
 
-			var result = new FileStreamResult(stream, MimeTypes.MapNameToMimeType(path));
-			result.FileDownloadName = Path.GetFileName(path);
+							return result;
+						}
+						catch (IOException)
+						{
+							NotifyWarning(T("Admin.Common.FileInUse"));
+						}
+					}
+				}
+			}
+			else
+			{
+				message = T("Admin.AccessDenied.Description");
+			}
 
-			return result;
+			if (message.IsEmpty())
+			{
+				message = T("Admin.Common.ResourceNotFound");
+			}
+
+			return File(Encoding.UTF8.GetBytes(message), MediaTypeNames.Text.Plain, "DownloadImportFile.txt");
 		}
 
 		[HttpPost]
 		public ActionResult DeleteImportFile(int id, string name)
 		{
-			if (_services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
+			if (Services.Permissions.Authorize(StandardPermissionProvider.ManageImports))
 			{
-				var profile = _importService.GetImportProfileById(id);
+				var profile = _importProfileService.GetImportProfileById(id);
 				if (profile != null)
 				{
+					var importFiles = profile.GetImportFiles();
 					var path = Path.Combine(profile.GetImportFolder(true), name);
 					FileSystemHelper.Delete(path);
 				}

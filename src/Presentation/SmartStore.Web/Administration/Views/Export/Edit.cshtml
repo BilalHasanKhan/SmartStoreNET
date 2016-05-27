@@ -2,7 +2,7 @@
 @using SmartStore.Core.Domain.DataExchange;
 @using SmartStore.Admin.Models.DataExchange;
 @{
-	var title = string.Concat(T("Admin.Common.Edit"), " ", T("Common.Profile"));	
+	var title = string.Concat(T("Common.Profile"), " - ", T("Admin.Common.Edit"));
 	ViewBag.Title = title;
 }
 
@@ -19,13 +19,20 @@
 			<div class="options">
 				@if (Model.HasActiveProvider)
 				{
+					if (Model.Id != 0)
+					{
+						<button type="button" id="ProfileExportButton" class="btn btn-default" data-url="@Url.Action("Execute", "Export", new { area = "Admin", id = Model.Id })">
+							<i class="fa fa-gears"></i>&nbsp;@T("Common.Export")
+						</button>
+					}
+
 					<a href="@Url.Action("Preview", new { id = Model.Id })" class="btn">
 						<i class="fa fa-eye"></i>&nbsp;@T("Admin.Common.Preview")
 					</a>
 				}
 				@if (Model.LogFileExists)
 				{
-					<a href="@Url.Action("DownloadLogFile", new { id = Model.Id })" class="btn" download>
+					<a href="@Url.Action("DownloadLogFile", new { id = Model.Id })" class="btn" target="LogFile">
 						<i class="fa fa-file-text-o"></i>&nbsp;@T("Admin.Configuration.ActivityLog")
 					</a>
 				}
@@ -124,16 +131,7 @@
 					@Html.SmartLabelFor(x => x.Provider.FriendlyName)
 				</td>
 				<td class="adminData">
-					@if (Model.Provider.ConfigurationUrl.HasValue())
-					{
-						<a href="@Model.Provider.ConfigurationUrl" title="@T("Admin.Configuration.Plugins.Fields.Configure")">
-							@Model.Provider.FriendlyName.NaIfEmpty()
-						</a>
-					}
-					else
-					{
-						<div>@Model.Provider.FriendlyName.NaIfEmpty()</div>
-					}
+					<div>@Model.Provider.FriendlyName.NaIfEmpty()</div>
 					<div class="muted">@(Model.ProviderSystemName.NaIfEmpty())</div>
 				</td>
 			</tr>
@@ -209,6 +207,11 @@
 
 @helper TabPartition()
 {
+	<div class="alert alert-info">
+		<button type="button" class="close" data-dismiss="alert">&#215;</button>
+		@Html.Raw(T("Admin.DataExchange.Export.Partition.Note"))
+	</div>
+
 	<table class="adminContent">
 		<tr>
 			<td class="adminTitle">
@@ -251,7 +254,10 @@
 
 @helper TabFilter()
 {
-	if (Model.Provider.EntityType == ExportEntityType.Product || Model.Provider.EntityType == ExportEntityType.Order)
+	if (Model.Provider.EntityType == ExportEntityType.Product ||
+		Model.Provider.EntityType == ExportEntityType.Customer ||
+		Model.Provider.EntityType == ExportEntityType.Order || 
+		Model.Provider.EntityType == ExportEntityType.NewsLetterSubscription)
 	{
 		<div class="alert alert-info">@Html.Raw(T("Admin.DataExchange.Export.Filter.Note"))</div>
 		@Html.Partial("_Tab.Filter", Model)
@@ -282,7 +288,7 @@
 			@if (Model.Provider.ConfigPartialViewName.HasValue())
 			{
 				<div class="alert alert-info">
-					<button type="button" class="close" data-dismiss="alert">×</button>
+					<button type="button" class="close" data-dismiss="alert">&#215;</button>
 					@Html.Raw(T("Admin.DataExchange.Export.Configuration.Note"))
 				</div>
 				
@@ -367,6 +373,15 @@
 					$('#FileNamePatternExample').find('div:first').text(resp);
 				}
 			});
+		});
+
+		// execute export
+		$('#ProfileExportButton').click(function (e) {
+			e.preventDefault();
+			$(this).doPostData({
+				ask: '@T("Admin.Common.AskToProceed")'
+			});
+			return false;
 		});
 	});
 </script>

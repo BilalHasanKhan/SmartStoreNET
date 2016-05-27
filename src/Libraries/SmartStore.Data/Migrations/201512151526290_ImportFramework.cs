@@ -102,12 +102,6 @@ namespace SmartStore.Data.Migrations
 				"Specifies the name of the import profile.",
 				"Legt den Namen des Importprofils fest.");
 
-			builder.AddOrUpdate("Admin.DataExchange.Import.FileType",
-				"File type",
-				"Dateityp",
-				"The file type of the import file(s).",
-				"Der Dateityp der Importdatei(en).");
-
 			builder.AddOrUpdate("Admin.DataExchange.Import.ProgressInfo",
 				"{0} of {1} records processed",
 				"{0} von {1} Datensätzen verarbeitet");
@@ -118,7 +112,7 @@ namespace SmartStore.Data.Migrations
 			builder.AddOrUpdate("Enums.SmartStore.Core.Domain.DataExchange.ImportEntityType.NewsLetterSubscription", "Newsletter Subscriber", "Newsletter Abonnent");
 			builder.AddOrUpdate("Enums.SmartStore.Core.Domain.DataExchange.ImportEntityType.Category", "Category", "Warengruppe");
 
-			builder.AddOrUpdate("Enums.SmartStore.Core.Domain.DataExchange.ImportFileType.CSV", "Delimiter separated values (.csv)", "Trennzeichen getrennte Werte (.csv)");
+			builder.AddOrUpdate("Enums.SmartStore.Core.Domain.DataExchange.ImportFileType.CSV", "Delimiter separated values (.csv, .txt, .tab)", "Trennzeichen getrennte Werte (.csv, .txt, .tab)");
 			builder.AddOrUpdate("Enums.SmartStore.Core.Domain.DataExchange.ImportFileType.XLSX", "Excel (.xlsx)", "Excel  (.xlsx)");
 
 			builder.AddOrUpdate("Admin.DataExchange.Import.FileUpload",
@@ -205,16 +199,12 @@ namespace SmartStore.Data.Migrations
 			builder.AddOrUpdate("Admin.Promotions.NewsLetterSubscriptions.Fields.NewsLetterSubscriptionGuid", "Subscription GUID", "Abonnement GUID");
 
 			builder.AddOrUpdate("Admin.DataExchange.ColumnMapping.Note",
-				"For each field of the import file you can optionally set whether and to which entity property the data is to be imported. It is also possible to define a default value which is applied when the import field is empty. Through <b>Clear</b> all made assignments are reset to their original values.",
-				"Sie können optional für jedes Feld der Importdatei festlegen, ob und nach welcher Entitätseigenschaft dessen Daten importiert werden sollen. Zudem ist die Angabe eines Standardwertes möglich, der angewendet wird, wenn das Importfeld leer ist. Über <b>Zurücksetzen</b> werden alle getätigten Zuordnungen auf ihre Ursprungswerte zurückgesetzt.");
+				"You can optionally set for each field of the import file whether and for which object property the data should be imported. Fields with equal names are always imported as long as they are not explicitly ignored. Not yet selected properties are highlighted in the selection list. It is also possible to define a default value which is applied when the import field is empty. Stored assignments becomes invalid and reset when the delimiter changes.",
+				"Sie können optional für jedes Feld der Importdatei festlegen, ob und nach welcher Objekteigenschaft dessen Daten zu importieren sind. Gleichnamige Felder werden grundsätzlich immer importiert, sofern sie nicht explizit ignoriert werden sollen. Noch nicht ausgewählte Eigenschaften sind in der Auswahlliste hervorgehoben. Zudem ist die Angabe eines Standardwertes möglich, der angewendet wird, wenn das Importfeld leer ist. Durch Änderung des Trennzeichens werden gespeicherte Zuordnungen ungültig und zurückgesetzt.");
 
 			builder.AddOrUpdate("Admin.DataExchange.ColumnMapping.ImportField", "Import Field", "Importfeld");
-			builder.AddOrUpdate("Admin.DataExchange.ColumnMapping.EntityProperty", "Entity property", "Eigenschaft der Entität");
+			builder.AddOrUpdate("Admin.DataExchange.ColumnMapping.EntityProperty", "Object property", "Eigenschaft des Objektes");
 			builder.AddOrUpdate("Admin.DataExchange.ColumnMapping.DefaultValue", "Default Value", "Standardwert");
-
-			builder.AddOrUpdate("Admin.DataExchange.ColumnMapping.Validate.EntityMultipleMapped",
-				"The entity property \"{0}\" was assigned several times. Please assign each property only once.",
-				"Die Entitätseigenschaft \"{0}\" wurde mehrfach zugeodnet. Bitte ordnen Sie jede Eigenschaft nur einmal zu.");
 
 
 			builder.Delete(
@@ -237,7 +227,9 @@ namespace SmartStore.Data.Migrations
 				"Admin.Common.ImportFromExcel.Cancelled",
 				"Admin.Common.ImportFromExcel.DownloadReport",
 				"Admin.Common.ImportFromExcel.NoReportAvailable",
-				"Admin.Configuration.ActivityLog.ActivityLog.Fields.ActivityLogTypeColumn"
+
+				"Admin.Configuration.ActivityLog.ActivityLog.Fields.ActivityLogTypeColumn",
+				"Plugins.ExchangeRate.EcbExchange.SetCurrencyToEURO"
 			);
 
 			builder.AddOrUpdate("ActivityLog.DeleteOrder", "Deleted order {0}", "Auftrag {0} gelöscht");
@@ -381,6 +373,49 @@ namespace SmartStore.Data.Migrations
 				"Meta Robots",
 				"Specifies if and how search engines indexing the pages of your store.",
 				"Legt fest, ob und wie Suchmaschinen die Seiten Ihres Shops indexieren.");
+
+			builder.AddOrUpdate("Providers.ExchangeRate.EcbExchange.SetCurrencyToEURO",
+				"You can use ECB (European central bank) exchange rate provider only when exchange rate currency code is set to EURO.",
+				"Der EZB-Wechselkursdienst kann nur genutzt werden, wenn der Wechselkurs-Währungscode auf EUR gesetzt ist.");
+
+
+			builder.AddOrUpdate("Common.Loading", "Loading", "Lade");
+			builder.AddOrUpdate("Common.ShowMore", "Show more", "Mehr anzeigen");
+			builder.AddOrUpdate("Common.Published", "Published", "Veröffentlicht");
+			builder.AddOrUpdate("Common.Unpublished", "Unpublished", "Unveröffentlicht");
+			builder.AddOrUpdate("Common.NotSelectable", "Not selectable", "Nicht auswählbar");
+
+			builder.AddOrUpdate("Common.EntityPicker.SinglePickNote",
+				"Click on an item to select it and OK to apply it.",
+				"Klicken Sie auf ein Element, um es auszuwählen und OK, um es zu übernehmen.");
+
+			builder.AddOrUpdate("Common.EntityPicker.MultiPickNote",
+				"Click on an item to select or deselect it and OK to apply the selection.",
+				"Klicken Sie auf ein Element, um es aus- bzw. abzuwählen und OK, um die Auswahl zu übernehmen.");
+
+			builder.AddOrUpdate("Common.EntityPicker.NoMoreItemsFound",
+				"There were no more items found.",
+				"Es wurden keine weiteren Elemente gefunden.");
+
+			builder.AddOrUpdate("Admin.Catalog.Products.BundleItems.NotesOnProductBundles",
+				"Notes on product bundles",
+				"Hinweise zu Produkt-Bundles");
+
+			builder.AddOrUpdate("Admin.Catalog.Products.RelatedProducts.AddNew",
+				"Add cross-selling product",
+				"Cross-Selling-Produkt hinzufügen");
+
+			builder.AddOrUpdate("Admin.Catalog.Products.RelatedProducts.SaveBeforeEdit",
+				"You need to save the product before you can add cross-selling products for this product page.",
+				"Sie müssen das Produkt speichern, bevor Sie Cross-Selling-Produkte hinzufügen können.");
+
+			builder.AddOrUpdate("Admin.Catalog.Products.CrossSells.AddNew",
+				"Add checkout-selling product",
+				"Checkout-Selling-Produkt hinzufügen");
+
+			builder.AddOrUpdate("Admin.Catalog.Products.CrossSells.SaveBeforeEdit",
+				"You need to save the product before you can add checkout-selling products for this product page.",
+				"Sie müssen das Produkt speichern, bevor Sie Checkout-Selling-Produkte hinzufügen können.");
 		}
 	}
 }

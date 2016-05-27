@@ -360,6 +360,7 @@ namespace SmartStore.Web.Controllers
 
             model.TermsOfServiceEnabled = _orderSettings.TermsOfServiceEnabled;
             model.ShowConfirmOrderLegalHint = _shoppingCartSettings.ShowConfirmOrderLegalHint;
+			model.ShowEsdRevocationWaiverBox = _shoppingCartSettings.ShowEsdRevocationWaiverBox;
 			model.BypassPaymentMethodInfo = _paymentSettings.BypassPaymentMethodInfo;
             return model;
         }
@@ -830,8 +831,10 @@ namespace SmartStore.Web.Controllers
 
                 var placeOrderExtraData = new Dictionary<string, string>();
                 placeOrderExtraData["CustomerComment"] = form["customercommenthidden"];
+				placeOrderExtraData["SubscribeToNewsLetter"] = form["SubscribeToNewsLetterHidden"];
+				placeOrderExtraData["AcceptThirdPartyEmailHandOver"] = form["AcceptThirdPartyEmailHandOverHidden"];
 
-                var placeOrderResult = _orderProcessingService.PlaceOrder(processPaymentRequest, placeOrderExtraData);
+				var placeOrderResult = _orderProcessingService.PlaceOrder(processPaymentRequest, placeOrderExtraData);
 
                 if (placeOrderResult.Success)
                 {
@@ -855,7 +858,7 @@ namespace SmartStore.Web.Controllers
                 }
                 else
                 {
-					model.Warnings.AddRange(placeOrderResult.Errors);
+					model.Warnings.AddRange(placeOrderResult.Errors.Select(x => HtmlUtils.ConvertPlainTextToHtml(x)));
                 }
             }
             catch (Exception exc)

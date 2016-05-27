@@ -96,6 +96,11 @@ namespace SmartStore.Core.Domain.DataExchange
 		public string Brand { get; set; }
 
 		/// <summary>
+		/// Number of images per object to be exported
+		/// </summary>
+		public int? NumberOfPictures { get; set; }
+
+		/// <summary>
 		/// Picture size
 		/// </summary>
 		public int PictureSize { get; set; }

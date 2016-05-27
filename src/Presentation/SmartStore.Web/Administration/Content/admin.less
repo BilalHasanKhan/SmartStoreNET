@@ -42,6 +42,11 @@ a:hover {
 	background-color: @dropdownLinkBackgroundHover;
 }
 
+.alert {
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+
 /* Page
 -------------------------------------------------------------- */
 
@@ -266,16 +271,6 @@ header {
 /* SM additions
 -------------------------------------------------------------- */
 
-.ajax-loader-small {
-    display: inline-block;
-    position: relative;
-    width: 16px;
-    height: 16px;
-    padding: 0;
-    margin: 0;
-    background: transparent url('images/ajax_loader_small.gif') 50% 50% no-repeat;
-}
-
 #ajax-busy {
 	position: fixed;
 	opacity: 0;
@@ -410,7 +405,7 @@ td.adminData > input[type="checkbox"] {
 	.title,
 	.head {
 		font-size: @fontSizeLarge;
-		padding: 8px 0;
+		padding: 12px 0;
 	}
 	.head {
 		margin-bottom: 12px;
@@ -602,11 +597,6 @@ body .t-content.t-state-active {
 .dialog-content-container {
 	margin: 6px 0 2px 0;
 	padding: 5px;
-}
-
-.modal-large {
-	width: 800px !important;
-	margin: -250px 0 0 -400px !important;
 }
 
 
@@ -912,11 +902,14 @@ td.adminSeparator hr {
 }
 
 .admin-table {
+    thead th {
+        text-transform: uppercase;
+    }
+    th, td {
+        padding: 12px;
+    }
 	.disabled {
 		.muted();
-	}
-	.centered {
-		text-align: center;
 	}
 	.progress-info {
 		min-width: 260px;
@@ -1548,20 +1541,6 @@ table.payment-method-features td {
     text-decoration: none;
 }
 
-#product-edit h3,
-.caption-container h3 {
-    font-family: @headingsFontFamily;
-    font-weight: @headingsFontWeight;
-    font-size: 18px;
-    line-height: 36px;
-    color: #333;
-}
-#product-edit h3.bordered,
-.caption-container h3.bordered {
-    border: 0;
-    border-bottom: 1px solid #e5e5e5;
-}
-
 
 /* Download editor
 -------------------------------------------------------------- */
@@ -1598,4 +1577,85 @@ table.payment-method-features td {
 .minimal-task-widget .btn-actions {
 	display: inline-block; 
 	margin-left: 10px;
+}
+
+
+/* Data exchange
+-------------------------------------------------------------- */
+.profile-list {
+	margin-bottom: 10px;
+	border-bottom: 1px solid #ddd;
+}
+
+/* Import column mapping
+-------------------------------------------------------------- */
+@media (max-width: 1280px) {
+	#ImportColumnMappings .right-label,
+	.column-mapping .mapping-button-label,
+	.mapping-list-item .right-label {
+		display: none;
+	}
+}
+
+.column-mapping .right-label,
+.mapping-list-item .right-label {
+	float: right;
+	font-size: 0.9em;
+}
+.mapping-list-item {
+	.ellipsis();
+}
+
+.column-mapping {
+	.column-one, .column-two {
+		width: 42%;
+	}
+
+	.select-column, .select-property, .input-default {
+		width: 98%;
+	}
+
+	th, td, .mapping-delete, .mapping-add, .mapping-apply, .mapping-cancel {
+		white-space: nowrap;
+		padding-left: 8px;
+		padding-right: 8px;
+	}
+
+	.select2-container .select2-choice span {
+		margin-right: 12px;
+		white-space: nowrap;
+	}
+
+	.mapping-edit {
+		white-space: nowrap;
+
+		.select-column, .select-property {
+			width: 84%;
+		}
+		.select2-container {
+			float: left;
+			display: inline-block;
+			min-width: 220px;
+			margin-right: 4px;
+		}
+	}
+
+	.mapping-item {
+		.item-inner {
+			white-space: nowrap;
+			cursor: pointer;
+			padding: 7px 0;
+
+			.property-icon {
+				display: inline-block;
+				margin-right: 0;
+			}
+			.left-label {
+				display: inline-block;
+			}
+			.right-label {
+				margin-right: 20px;
+			}
+		}
+	}
 }

@@ -71,14 +71,34 @@ namespace SmartStore.Core.Domain
 		public int Take { get; set; }
 
 		/// <summary>
+		/// Whether to only update existing data
+		/// </summary>
+		public bool UpdateOnly { get; set; }
+
+		/// <summary>
+		/// Name of key fields to identify existing records during import
+		/// </summary>
+		public string KeyFieldNames { get; set; }
+
+		/// <summary>
 		/// File type specific configuration
 		/// </summary>
 		public string FileTypeConfiguration { get; set; }
 
 		/// <summary>
+		/// XML with extra data
+		/// </summary>
+		public string ExtraData { get; set; }
+
+		/// <summary>
 		/// Mapping of import columns
 		/// </summary>
 		public string ColumnMapping { get; set; }
+
+		/// <summary>
+		/// XML with information about the last import
+		/// </summary>
+		public string ResultInfo { get; set; }
 
 		/// <summary>
 		/// The scheduling task identifier

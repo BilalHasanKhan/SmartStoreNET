@@ -92,9 +92,9 @@
       <Private>True</Private>
       <HintPath>..\..\..\packages\Microsoft.Web.Infrastructure.1.0.0.0\lib\net40\Microsoft.Web.Infrastructure.dll</HintPath>
     </Reference>
-    <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\packages\Newtonsoft.Json.6.0.6\lib\net45\Newtonsoft.Json.dll</HintPath>
+    <Reference Include="Newtonsoft.Json, Version=8.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>..\..\..\packages\Newtonsoft.Json.8.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="SmartStore.Licensing, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -254,6 +254,7 @@
     <Compile Include="Models\DataExchange\CsvConfigurationModel.cs" />
     <Compile Include="Models\DataExchange\ExportDeploymentModel.cs" />
     <Compile Include="Models\DataExchange\ExportFilterModel.cs" />
+    <Compile Include="Models\DataExchange\ImportProfileListModel.cs" />
     <Compile Include="Models\DataExchange\ImportProfileModel.cs" />
     <Compile Include="Models\DataExchange\ProfileInfoForProviderModel.cs" />
     <Compile Include="Models\DataExchange\ExportPreviewModel.cs" />
@@ -264,11 +265,13 @@
     <Compile Include="Models\Messages\MessageTemplateListModel.cs" />
     <Compile Include="Models\News\NewsItemListModel.cs" />
     <Compile Include="Models\Orders\AutoUpdateOrderItemModel.cs" />
+    <Compile Include="Models\Orders\CheckoutAttributeListModel.cs" />
     <Compile Include="Models\Orders\ReturnRequestListModel.cs" />
     <Compile Include="Models\Payments\PaymentMethodEditModel.cs" />
     <Compile Include="Models\Plugins\LicensePluginModel.cs" />
     <Compile Include="Models\Plugins\LocalPluginsModel.cs" />
     <Compile Include="Models\Plugins\ProviderModelList.cs" />
+    <Compile Include="Models\Settings\DataExchangeSettingsModel.cs" />
     <Compile Include="Models\UrlRecord\UrlRecordListModel.cs" />
     <Compile Include="Models\UrlRecord\UrlRecordModel.cs" />
     <Compile Include="Models\Settings\ContentSliderSettingsModel.cs" />
@@ -426,29 +429,7 @@
     <Compile Include="Validators\Catalog\ProductValidator.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Content\images\ajax-progress-2.gif" />
     <Content Include="Content\images\ajax_loader_small.gif" />
-    <Content Include="Content\images\ap-catalog-white.png" />
-    <Content Include="Content\images\ap-catalog.png" />
-    <Content Include="Content\images\ap-chevron.png" />
-    <Content Include="Content\images\ap-cms-white.png" />
-    <Content Include="Content\images\ap-cms.png" />
-    <Content Include="Content\images\ap-customers-white.png" />
-    <Content Include="Content\images\ap-customers.png" />
-    <Content Include="Content\images\ap-dashboard-white.png" />
-    <Content Include="Content\images\ap-dashboard.png" />
-    <Content Include="Content\images\ap-default-white.png" />
-    <Content Include="Content\images\ap-default.png" />
-    <Content Include="Content\images\ap-help-white.png" />
-    <Content Include="Content\images\ap-help.png" />
-    <Content Include="Content\images\ap-marketing-white.png" />
-    <Content Include="Content\images\ap-marketing.png" />
-    <Content Include="Content\images\ap-sales-white.png" />
-    <Content Include="Content\images\ap-sales.png" />
-    <Content Include="Content\images\ap-settings-white.png" />
-    <Content Include="Content\images\ap-settings.png" />
-    <Content Include="Content\images\ap-system-white.png" />
-    <Content Include="Content\images\ap-system.png" />
     <Content Include="Content\images\checkmark.png" />
     <Content Include="Content\images\google-maps.gif" />
     <Content Include="Content\images\ico-content-negative.png" />
@@ -477,7 +458,6 @@
     <Content Include="Content\images\icon-plugin-shipping.png" />
     <Content Include="Content\images\icon-plugin-social.png" />
     <Content Include="Content\images\icon-plugin-tax.png" />
-    <Content Include="Content\images\preloader-32.gif" />
     <Content Include="Content\images\smnet.png" />
     <Content Include="favicon.ico" />
     <Content Include="Scripts\admin.common.js" />
@@ -486,12 +466,8 @@
     <Content Include="Scripts\jquery-1.8.3.min.js" />
     <Content Include="Scripts\jquery.tmpl.min.js" />
     <Content Include="Scripts\admin.globalinit.js" />
-    <Content Include="Scripts\smartstore.download.js">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Scripts\smartstore.discountrules.js">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
+    <Content Include="Scripts\smartstore.download.js" />
+    <Content Include="Scripts\smartstore.discountrules.js" />
     <Content Include="Scripts\_references.js" />
     <Content Include="sitemap.config">
       <SubType>Designer</SubType>
@@ -532,7 +508,6 @@
     <Content Include="Views\Export\_Tab.Projection.cshtml" />
     <Content Include="Views\Export\InfoProfile.cshtml" />
     <Content Include="Views\Export\_Tab.Deployment.cshtml" />
-    <Content Include="Views\Export\InfoDeployment.cshtml" />
     <Content Include="Views\UrlRecord\List.cshtml" />
     <Content Include="Views\UrlRecord\Edit.cshtml" />
     <Content Include="Views\UrlRecord\_CreateOrUpdate.cshtml" />
@@ -540,11 +515,13 @@
     <Content Include="Views\Export\ProfileFileCount.cshtml" />
     <Content Include="Views\Export\ProfileFileDetails.cshtml" />
     <Content Include="Views\Import\List.cshtml" />
-    <Content Include="Views\Import\Create.cshtml" />
-    <Content Include="Views\Import\_CreateOrUpdate.cshtml" />
+    <Content Include="Views\Import\_Update.cshtml" />
     <Content Include="Views\Import\Edit.cshtml" />
     <Content Include="Views\Shared\CsvConfiguration.cshtml" />
     <Content Include="Views\Import\_ColumnMappings.cshtml" />
+    <Content Include="Views\Import\ProfileImportResult.cshtml" />
+    <Content Include="Views\Setting\DataExchange.cshtml" />
+    <Content Include="Views\Export\_ProfileList.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Content\admin.less" />
@@ -743,15 +720,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Views\Product\EditorTemplates\ProductManufacturer.cshtml" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="Views\Product\RelatedProductAddPopup.cshtml" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="Views\Product\CrossSellProductAddPopup.cshtml" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="Views\Category\ProductAddPopup.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Views\Product\EditorTemplates\TierPriceCustomer.cshtml" />
@@ -1046,9 +1014,6 @@
     <Content Include="Views\Manufacturer\List.cshtml" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Views\Manufacturer\ProductAddPopup.cshtml" />
-  </ItemGroup>
-  <ItemGroup>
     <Content Include="Views\ShoppingCart\CurrentCarts.cshtml" />
   </ItemGroup>
   <ItemGroup>
@@ -1236,9 +1201,6 @@
     <Content Include="Views\Product\_CreateOrUpdate.Stores.cshtml" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Views\Product\AssociatedProductAddPopup.cshtml" />
-  </ItemGroup>
-  <ItemGroup>
     <Content Include="Views\Product\_CreateOrUpdate.AssociatedProducts.cshtml" />
   </ItemGroup>
   <ItemGroup>
@@ -1251,13 +1213,7 @@
     <Content Include="Views\Product\_CreateOrUpdate.BundleItems.cshtml" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Views\Product\BundleItemAddPopup.cshtml" />
-  </ItemGroup>
-  <ItemGroup>
     <Content Include="Views\Product\BundleItemEditPopup.cshtml" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="Views\Product\ProductAttributeValueLinkagePopup.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Views\Media\UploadImage.cshtml" />

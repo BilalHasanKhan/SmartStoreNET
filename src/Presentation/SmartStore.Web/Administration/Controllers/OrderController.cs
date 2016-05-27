@@ -210,6 +210,7 @@ namespace SmartStore.Admin.Controllers
             model.AffiliateId = order.AffiliateId;
             model.CustomerComment = order.CustomerOrderComment;
 			model.HasNewPaymentNotification = order.HasNewPaymentNotification;
+			model.AcceptThirdPartyEmailHandOver = order.AcceptThirdPartyEmailHandOver;
 
 			if (order.AffiliateId != 0)
 			{
@@ -584,7 +585,7 @@ namespace SmartStore.Admin.Controllers
         {
             var product = _productService.GetProductById(productId);
 			if (product == null)
-				throw new ArgumentException("No product found with the specified id");
+				throw new ArgumentException(T("Products.NotFound", productId));
 
 			var customer = _workContext.CurrentCustomer;	// TODO: we need a customer representing entity instance for backend work
 			var order = _orderService.GetOrderById(orderId);

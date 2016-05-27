@@ -320,7 +320,12 @@ namespace SmartStore.Web.Controllers
 		[ChildActionOnly]
 		public ActionResult ProductManufacturers(int productId, bool preparePictureModel = false)
 		{
-			string cacheKey = string.Format(ModelCacheEventConsumer.PRODUCT_MANUFACTURERS_MODEL_KEY, productId, _services.WorkContext.WorkingLanguage.Id, _services.StoreContext.CurrentStore.Id);
+			var cacheKey = string.Format(ModelCacheEventConsumer.PRODUCT_MANUFACTURERS_MODEL_KEY,
+				productId,
+				!_catalogSettings.HideManufacturerDefaultPictures,
+				_services.WorkContext.WorkingLanguage.Id,
+				_services.StoreContext.CurrentStore.Id);
+
 			var cacheModel = _services.Cache.Get(cacheKey, () =>
 			{
 				var model = _manufacturerService.GetProductManufacturersByProductId(productId)
@@ -329,7 +334,8 @@ namespace SmartStore.Web.Controllers
 						var m = x.Manufacturer.ToModel();
 						if (preparePictureModel)
 						{
-							m.PictureModel.ImageUrl = _pictureService.GetPictureUrl(x.Manufacturer.PictureId.GetValueOrDefault());
+							m.PictureModel.ImageUrl = _pictureService.GetPictureUrl(x.Manufacturer.PictureId.GetValueOrDefault(), 0, !_catalogSettings.HideManufacturerDefaultPictures);
+
 							var picture = _pictureService.GetPictureUrl(x.Manufacturer.PictureId.GetValueOrDefault());
 							if (picture != null)
 							{
@@ -355,7 +361,7 @@ namespace SmartStore.Web.Controllers
 		{
 			var product = _productService.GetProductById(id);
 			if (product == null)
-				throw new ArgumentException("No product found with the specified id");
+				throw new ArgumentException(T("Products.NotFound", id));
 
 			var model = new ProductReviewOverviewModel()
 			{
@@ -372,7 +378,7 @@ namespace SmartStore.Web.Controllers
 		{
 			var product = _productService.GetProductById(productId);
 			if (product == null)
-				throw new ArgumentException("No product found with the specified id");
+				throw new ArgumentException(T("Products.NotFound", productId));
 
 			var model = _helper.PrepareProductSpecificationModel(product);
 
@@ -403,7 +409,7 @@ namespace SmartStore.Web.Controllers
 
 			var product = _productService.GetProductById(productId);
 			if (product == null)
-				throw new ArgumentException("No product found with the specified id");
+				throw new ArgumentException(T("Products.NotFound", productId));
 
 			if (!product.HasTierPrices)
 				return Content(""); //no tier prices
@@ -522,7 +528,7 @@ namespace SmartStore.Web.Controllers
 		{
 			var product = _productService.GetProductById(id);
 			if (product == null || product.Deleted)
-				throw new ArgumentException("No product found with the specified id");
+				throw new ArgumentException(T("Products.NotFound", id));
 
 			var model = new BackInStockSubscribeModel();
 			model.ProductId = product.Id;
@@ -551,7 +557,7 @@ namespace SmartStore.Web.Controllers
 		{
 			var product = _productService.GetProductById(id);
 			if (product == null || product.Deleted)
-				throw new ArgumentException("No product found with the specified id");
+				throw new ArgumentException(T("Products.NotFound", id));
 
 			if (!_services.WorkContext.CurrentCustomer.IsRegistered())
 				return Content(T("BackInStockSubscriptions.OnlyRegistered"));
@@ -762,7 +768,7 @@ namespace SmartStore.Web.Controllers
 		{
 			var product = _productService.GetProductById(productId);
 			if (product == null)
-				throw new ArgumentException("No product found with the specified id");
+				throw new ArgumentException(T("Products.NotFound", productId));
 
 			var cacheKey = string.Format(ModelCacheEventConsumer.PRODUCTTAG_BY_PRODUCT_MODEL_KEY, product.Id, _services.WorkContext.WorkingLanguage.Id, _services.StoreContext.CurrentStore.Id);
 			var cacheModel = _services.Cache.Get(cacheKey, () =>
@@ -893,7 +899,7 @@ namespace SmartStore.Web.Controllers
 		{
 			var productReview = _customerContentService.GetCustomerContentById(productReviewId) as ProductReview;
 			if (productReview == null)
-				throw new ArgumentException("No product review found with the specified id");
+				throw new ArgumentException(T("Reviews.NotFound", productReviewId));
 
 			if (_services.WorkContext.CurrentCustomer.IsGuest() && !_catalogSettings.AllowAnonymousUsersToReviewProduct)
 			{
@@ -1032,7 +1038,7 @@ namespace SmartStore.Web.Controllers
 				}
 				else
 				{
-					ModelState.AddModelError("", "Fehler beim Versenden der Email. Bitte versuchen Sie es später erneut.");
+					ModelState.AddModelError("", T("Common.Error.SendMail"));
 				}
 			}
 

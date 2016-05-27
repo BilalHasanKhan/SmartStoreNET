@@ -17,6 +17,7 @@ namespace SmartStore.Services.DataExchange.Import
 		private readonly IList<IDataColumn> _columns;
 		private readonly IList<IDataRow> _rows;
 		private readonly IDictionary<string, int> _columnIndexes;
+		private readonly IDictionary<string, int> _alternativeColumnIndexes;
 
 		public LightweightDataTable(IList<IDataColumn> columns, IList<object[]> data)
 		{
@@ -30,30 +31,69 @@ namespace SmartStore.Services.DataExchange.Import
 
 			_columns = new ReadOnlyCollection<IDataColumn>(columns);
 
+			TrimData(data);
+
 			var rows = data.Select(x => new LightweightDataRow(this, x)).Cast<IDataRow>().ToList();
 			_rows = new ReadOnlyCollection<IDataRow>(rows);
 
 			_columnIndexes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+			_alternativeColumnIndexes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
 			for (var i = 0; i < columns.Count; i++)
 			{
-				_columnIndexes[columns[i].Name] = i;
+				var name = columns[i].Name;
+				var alternativeName = GetAlternativeColumnNameFor(name);
+
+				_columnIndexes[name] = i;
+
+				if (!alternativeName.IsCaseInsensitiveEqual(name))
+					_alternativeColumnIndexes[alternativeName] = i;
 			}
-        }
+		}
+
+		private static void TrimData(IList<object[]> data)
+		{
+			// When a user deletes content instead of whole rows from an excel sheet,
+			// our data table contains completely empty rows at the end.
+			// Here we get rid of them as they are absolutely useless.
+			for (int i = data.Count - 1; i >= 0; i--)
+			{
+				var allColumnsEmpty = data[i].All(x => x == null || x == DBNull.Value);
+				if (allColumnsEmpty)
+				{
+					data.RemoveAt(i);
+					//i--;
+				}
+				else
+				{
+					// get out here on the first occurence of a NON-empty row
+					break;
+				}
+			}
+		}
 
 		public bool HasColumn(string name)
 		{
-			if (name.IsEmpty())
-				return false;
+			if (name.HasValue())
+			{
+				return (_columnIndexes.ContainsKey(name) || _alternativeColumnIndexes.ContainsKey(name));
+			}
 
-			return _columnIndexes.ContainsKey(name);
+			return false;
 		}
 
 		public int GetColumnIndex(string name)
 		{
 			int index;
 
-			if (name.HasValue() && _columnIndexes.TryGetValue(name, out index))
-				return index;
+			if (name.HasValue())
+			{
+				if (_columnIndexes.TryGetValue(name, out index))
+					return index;
+
+				if (_alternativeColumnIndexes.TryGetValue(name, out index))
+					return index;
+			}
 
 			return -1;
 		}
@@ -72,6 +112,17 @@ namespace SmartStore.Services.DataExchange.Import
 			{
 				return _rows;
 			}
+		}
+
+		public static string GetAlternativeColumnNameFor(string name)
+		{
+			if (name.IsEmpty())
+				return name;
+
+			return name
+				.Replace(" ", "")
+				.Replace("-", "")
+				.Replace("_", "");
 		}
 
 		public static IDataTable FromPostedFile(
@@ -109,7 +160,7 @@ namespace SmartStore.Services.DataExchange.Import
 
 			if (contentLength == 0)
 			{
-				throw Error.Argument("file", "The posted file '{0}' does not contain any data.".FormatInvariant(fileName)); // TODO Loc
+				throw Error.Argument("fileName", "The posted file '{0}' does not contain any data.".FormatInvariant(fileName));
 			}
 
 			IDataReader dataReader = null;
@@ -128,18 +179,18 @@ namespace SmartStore.Services.DataExchange.Import
 						break;
 				}
 
-				var table = LightweightDataTable.FromDataReader(dataReader);
+				var table = LightweightDataTable.FromDataReader(dataReader, skip, take);
 
 				if (table.Columns.Count == 0 || table.Rows.Count == 0)
 				{
-					throw Error.InvalidOperation("file", "The posted file '{0}' does not contain any columns or data rows.".FormatInvariant(fileName)); // TODO Loc
+					throw Error.InvalidOperation("The posted file '{0}' does not contain any columns or data rows.".FormatInvariant(fileName));
 				}
 
 				return table;
 			}
-			catch
+			catch (Exception ex)
 			{
-				throw;
+				throw ex;
 			}
 			finally
 			{
@@ -179,6 +230,8 @@ namespace SmartStore.Services.DataExchange.Import
 			}
 
 			var fieldCount = reader.FieldCount;
+
+			take = Math.Min(take, int.MaxValue - skip);
 
 			int i = -1;
 			while (reader.Read())

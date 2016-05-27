@@ -10,7 +10,11 @@ using SmartStore.Core.Domain;
 using SmartStore.Core.Domain.DataExchange;
 using SmartStore.Core.Domain.Tasks;
 using SmartStore.Core.Events;
+using SmartStore.Core.Localization;
+using SmartStore.Services.Catalog.Importer;
+using SmartStore.Services.Customers.Importer;
 using SmartStore.Services.Localization;
+using SmartStore.Services.Messages.Importer;
 using SmartStore.Services.Tasks;
 using SmartStore.Utilities;
 
@@ -25,6 +29,7 @@ namespace SmartStore.Services.DataExchange.Import
 		private readonly IEventPublisher _eventPublisher;
 		private readonly IScheduleTaskService _scheduleTaskService;
 		private readonly ILocalizationService _localizationService;
+		private readonly ILanguageService _languageService;
 		private readonly DataExchangeSettings _dataExchangeSettings;
 
 		public ImportProfileService(
@@ -32,71 +37,135 @@ namespace SmartStore.Services.DataExchange.Import
 			IEventPublisher eventPublisher,
 			IScheduleTaskService scheduleTaskService,
 			ILocalizationService localizationService,
+			ILanguageService languageService,
 			DataExchangeSettings dataExchangeSettings)
 		{
 			_importProfileRepository = importProfileRepository;
 			_eventPublisher = eventPublisher;
 			_scheduleTaskService = scheduleTaskService;
 			_localizationService = localizationService;
+			_languageService = languageService;
 			_dataExchangeSettings = dataExchangeSettings;
 		}
 
-		private string GetLocalizedPropertyName(ImportEntityType type, string propertyName)
+		private string GetLocalizedPropertyName(ImportEntityType type, string property)
 		{
-			if (propertyName.IsEmpty())
-				return null;
+			if (property.IsEmpty())
+				return "";
 
-			var defaultKey = "";
-			var keys = new Dictionary<string, string>
+			string key = null;
+			string prefixKey = null;
+
+			if (property.StartsWith("BillingAddress."))
+				prefixKey = "Admin.Orders.Fields.BillingAddress";
+			else if (property.StartsWith("ShippingAddress."))
+				prefixKey = "Admin.Orders.Fields.ShippingAddress";
+
+			#region Get resource key
+
+			switch (property)
 			{
-				{ "Id", "Admin.Common.Entity.Fields.Id" },
-				{ "LimitedToStores", "Admin.Common.Store.LimitedTo" },
-				{ "DisplayOrder", "Common.DisplayOrder" },
-				{ "Deleted", "Admin.Common.Deleted" },
-				{ "CreatedOnUtc", "Common.CreatedOn" },
-				{ "UpdatedOnUtc", "Common.UpdatedOn" },
-				{ "HasDiscountsApplied", "Admin.Catalog.Products.Fields.HasDiscountsApplied" },
-				{ "DefaultViewMode", "Admin.Configuration.Settings.Catalog.DefaultViewMode" },
-				{ "StoreId", "Admin.Common.Store" }
-			};
-
-			if (type == ImportEntityType.Product)
-			{
-				defaultKey = "Admin.Catalog.Products.Fields." + propertyName;
-
-				keys.Add("ParentGroupedProductId", "Admin.Catalog.Products.Fields.AssociatedToProductName");
+				case "Id":
+					key = "Admin.Common.Entity.Fields.Id";
+					break;
+				case "LimitedToStores":
+					key = "Admin.Common.Store.LimitedTo";
+					break;
+				case "DisplayOrder":
+					key = "Common.DisplayOrder";
+					break;
+				case "Deleted":
+					key = "Admin.Common.Deleted";
+					break;
+				case "CreatedOnUtc":
+				case "BillingAddress.CreatedOnUtc":
+				case "ShippingAddress.CreatedOnUtc":
+					key = "Common.CreatedOn";
+					break;
+				case "UpdatedOnUtc":
+					key = "Common.UpdatedOn";
+					break;
+				case "HasDiscountsApplied":
+					key = "Admin.Catalog.Products.Fields.HasDiscountsApplied";
+					break;
+				case "DefaultViewMode":
+					key = "Admin.Configuration.Settings.Catalog.DefaultViewMode";
+					break;
+				case "StoreId":
+					key = "Admin.Common.Store";
+					break;
+				case "ParentGroupedProductId":
+					key = "Admin.Catalog.Products.Fields.AssociatedToProductName";
+					break;
+				case "PasswordFormatId":
+					key = "Admin.Configuration.Settings.CustomerUser.DefaultPasswordFormat";
+					break;
+				case "LastIpAddress":
+					key = "Admin.Customers.Customers.Fields.IPAddress";
+					break;
+				default:
+					switch (type)
+					{
+						case ImportEntityType.Product:
+							key = "Admin.Catalog.Products.Fields." + property;
+							break;
+						case ImportEntityType.Category:
+							key = "Admin.Catalog.Categories.Fields." + property;
+							break;
+						case ImportEntityType.Customer:
+							if (property.StartsWith("BillingAddress.") || property.StartsWith("ShippingAddress."))						
+								key = "Admin.Address.Fields." + property.Substring(property.IndexOf('.') + 1);
+							else
+								key = "Admin.Customers.Customers.Fields." + property;
+							break;
+						case ImportEntityType.NewsLetterSubscription:
+							key = "Admin.Promotions.NewsLetterSubscriptions.Fields." + property;
+							break;
+					}
+					break;
 			}
-			else if (type == ImportEntityType.Category)
-			{
-				defaultKey = "Admin.Catalog.Categories.Fields." + propertyName;
-			}
-			else if (type == ImportEntityType.Customer)
-			{
-				defaultKey = "Admin.Customers.Customers.Fields." + propertyName;
 
-				keys.Add("PasswordFormatId", "Admin.Configuration.Settings.CustomerUser.DefaultPasswordFormat");
-				keys.Add("LastIpAddress", "Admin.Customers.Customers.Fields.IPAddress");
-			}
-			else if (type == ImportEntityType.NewsLetterSubscription)
-			{
-				defaultKey = "Admin.Promotions.NewsLetterSubscriptions.Fields." + propertyName;
-			}
+			#endregion
 
-			var result = _localizationService.GetResource(keys.ContainsKey(propertyName) ? keys[propertyName] : defaultKey, 0, false, "", true);
+			if (key.IsEmpty())
+				return "";
+
+			var result = _localizationService.GetResource(key, 0, false, "", true);
 
 			if (result.IsEmpty())
 			{
-				if (defaultKey.EndsWith("Id"))
-					result = _localizationService.GetResource(defaultKey.Substring(0, defaultKey.Length - 2), 0, false, "", true);
-				else if (defaultKey.EndsWith("Utc"))
-					result = _localizationService.GetResource(defaultKey.Substring(0, defaultKey.Length - 3), 0, false, "", true);
+				if (key.EndsWith("Id"))
+					result = _localizationService.GetResource(key.Substring(0, key.Length - 2), 0, false, "", true);
+				else if (key.EndsWith("Utc"))
+					result = _localizationService.GetResource(key.Substring(0, key.Length - 3), 0, false, "", true);
 			}
 
 			if (result.IsEmpty())
 			{
-				Debug.WriteLine("Missing string resource mapping for {0}.{1}".FormatInvariant(type.ToString(), propertyName));
-				return propertyName.SplitPascalCase();
+				Debug.WriteLine("Missing string resource mapping for {0} - {1}".FormatInvariant(type.ToString(), property));
+				result = property.SplitPascalCase();
 			}
+
+			if (prefixKey.HasValue())
+			{
+				result = string.Concat(_localizationService.GetResource(prefixKey, 0, false, "", true), " - ", result);
+			}
+
+			return result;
+		}
+
+		public string GetNewProfileName(ImportEntityType entityType)
+		{
+			var defaultNames = _localizationService.GetResource("Admin.DataExchange.Import.DefaultProfileNames").SplitSafe(";");
+
+			var result = defaultNames.SafeGet((int)entityType);
+
+			if (result.IsEmpty())
+				result = entityType.ToString();
+
+			var profileCount = _importProfileRepository.Table.Count(x => x.EntityTypeId == (int)entityType);
+
+			result = string.Concat(result, " ", profileCount + 1);
 
 			return result;
 		}
@@ -104,7 +173,9 @@ namespace SmartStore.Services.DataExchange.Import
 		public virtual ImportProfile InsertImportProfile(string fileName, string name, ImportEntityType entityType)
 		{
 			Guard.ArgumentNotEmpty(() => fileName);
-			Guard.ArgumentNotEmpty(() => name);
+
+			if (name.IsEmpty())
+				name = GetNewProfileName(entityType);
 
 			var task = new ScheduleTask
 			{
@@ -131,6 +202,26 @@ namespace SmartStore.Services.DataExchange.Import
 				profile.FileType = ImportFileType.XLSX;
 			else
 				profile.FileType = ImportFileType.CSV;
+
+			string[] keyFieldNames = null;
+
+			switch (entityType)
+			{
+				case ImportEntityType.Product:
+					keyFieldNames = ProductImporter.DefaultKeyFields;
+					break;
+				case ImportEntityType.Category:
+					keyFieldNames = CategoryImporter.DefaultKeyFields;
+					break;
+				case ImportEntityType.Customer:
+					keyFieldNames = CustomerImporter.DefaultKeyFields;
+					break;
+				case ImportEntityType.NewsLetterSubscription:
+					keyFieldNames = NewsLetterSubscriptionImporter.DefaultKeyFields;
+					break;
+			}
+
+			profile.KeyFieldNames = string.Join(",", keyFieldNames);
 
 			profile.FolderName = SeoHelper.GetSeName(name, true, false)
 				.ToValidPath()
@@ -208,6 +299,18 @@ namespace SmartStore.Services.DataExchange.Import
 			return profile;
 		}
 
+		public virtual ImportProfile GetImportProfileByName(string name)
+		{
+			if (name.IsEmpty())
+				return null;
+
+			var profile = _importProfileRepository.Table
+				.Expand(x => x.ScheduleTask)
+				.FirstOrDefault(x => x.Name == name);
+
+			return profile;
+		}
+
 		public virtual Dictionary<string, string> GetImportableEntityProperties(ImportEntityType entityType)
 		{
 			if (_entityProperties == null)
@@ -221,10 +324,28 @@ namespace SmartStore.Services.DataExchange.Import
 						var context = ((IObjectContextAdapter)_importProfileRepository.Context).ObjectContext;
 						var container = context.MetadataWorkspace.GetEntityContainer(context.DefaultContainerName, DataSpace.CSpace);
 
+						var allLanguages = _languageService.GetAllLanguages(true);
+						var allLanguageNames = allLanguages.ToDictionarySafe(x => x.UniqueSeoCode, x => LocalizationHelper.GetLanguageNativeName(x.LanguageCulture) ?? x.Name);
+
+						var localizableProperties = new Dictionary<ImportEntityType, string[]>
+						{
+							{ ImportEntityType.Product, new string[] { "Name", "ShortDescription", "FullDescription", "MetaKeywords", "MetaDescription", "MetaTitle", "SeName" } },
+							{ ImportEntityType.Category, new string[] { "Name", "FullName", "Description", "BottomDescription", "MetaKeywords", "MetaDescription", "MetaTitle", "SeName" } },
+							{ ImportEntityType.Customer, new string[] {  } },
+							{ ImportEntityType.NewsLetterSubscription, new string[] {  } }
+						};
+
+						var addressSet = container.GetEntitySetByName("Addresses", true);
+
+						var addressProperties = addressSet.ElementType.Members
+							.Where(x => !x.Name.IsCaseInsensitiveEqual("Id") && x.BuiltInTypeKind.HasFlag(BuiltInTypeKind.EdmProperty))
+							.Select(x => x.Name)
+							.ToList();
+
+
 						foreach (ImportEntityType type in Enum.GetValues(typeof(ImportEntityType)))
 						{
 							EntitySet entitySet = null;
-							var dic = new Dictionary<string, string>();
 
 							try
 							{
@@ -238,13 +359,43 @@ namespace SmartStore.Services.DataExchange.Import
 								throw new SmartException("There is no entity set for ImportEntityType {0}. Note, the enum value must equal the entity name.".FormatInvariant(type.ToString()));
 							}
 
-							foreach (var member in entitySet.ElementType.Members)
-							{
-								if (member.BuiltInTypeKind.HasFlag(BuiltInTypeKind.EdmProperty))
-								{
-									var localizedValue = GetLocalizedPropertyName(type, member.Name);
+							var dic = entitySet.ElementType.Members
+								.Where(x => !x.Name.IsCaseInsensitiveEqual("Id") && x.BuiltInTypeKind.HasFlag(BuiltInTypeKind.EdmProperty))
+								.Select(x => x.Name)
+								.ToDictionary(x => x, x => "", StringComparer.OrdinalIgnoreCase);
 
-									dic.Add(member.Name, localizedValue.NaIfEmpty());
+							// lack of abstractness?
+							if ((type == ImportEntityType.Product || type == ImportEntityType.Category) && !dic.ContainsKey("SeName"))
+							{
+								dic.Add("SeName", "");
+							}
+
+							// shipping and billing address
+							if (type == ImportEntityType.Customer)
+							{
+								foreach (var property in addressProperties)
+								{
+									dic.Add("BillingAddress." + property, "");
+									dic.Add("ShippingAddress." + property, "");
+								}
+							}
+
+							// add localized property names
+							foreach (var key in dic.Keys.ToList())
+							{
+								var localizedValue = GetLocalizedPropertyName(type, key);
+
+								dic[key] = localizedValue.NaIfEmpty();
+
+								if (localizableProperties[type].Contains(key))
+								{
+									foreach (var language in allLanguages)
+									{
+										dic.Add(
+											"{0}[{1}]".FormatInvariant(key, language.UniqueSeoCode.EmptyNull().ToLower()),
+											"{0} {1}".FormatInvariant(localizedValue.NaIfEmpty(), allLanguageNames[language.UniqueSeoCode])
+										);
+									}
 								}
 							}
 

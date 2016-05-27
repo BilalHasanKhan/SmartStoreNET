@@ -19,7 +19,10 @@
     <div class="page-body checkout-data">
         @*set "data-ajax" attribute to "false"*@
         @using (Html.BeginForm(null, null, FormMethod.Post, new RouteValueDictionary { { "data-ajax", "false" }, { "id", "confirm-order-form" } }))
-        {
+		{
+			<input type="hidden" id="SubscribeToNewsLetterHidden" name="SubscribeToNewsLetterHidden" />
+			<input type="hidden" id="AcceptThirdPartyEmailHandOverHidden" name="AcceptThirdPartyEmailHandOverHidden" />
+
             @Html.Widget("mobile_checkout_confirm_top")
 
             if (Model.Warnings.Count > 0)
@@ -27,9 +30,9 @@
             <div class="message-error">
                 <ul>
                     @for (int i = 0; i < Model.Warnings.Count; i++)
-                    {
-                        <li>@Model.Warnings[i]</li>
-                    }
+					{
+						<li>@Html.Raw(Model.Warnings[i])</li>
+					}
                 </ul>
             </div>
             }
@@ -75,13 +78,20 @@
                       <script type="text/javascript">
                         $(function () {
                             $('.confirm-order-next-step-button').click(function () {
-                                //terms of services
-                                var termOfServiceOk = true;
+                            	var termOfServiceOk = true,
+									userAgreementsOk = true,
+									esdRevocationWaiverOk = true,
+									alertMessage;
+
+                            	$('#SubscribeToNewsLetterHidden').val($('input[name=SubscribeToNewsLetter]').is(':checked'));
+                            	$('#AcceptThirdPartyEmailHandOverHidden').val($('input[name=AcceptThirdPartyEmailHandOver]').is(':checked'));
+
+                            	// terms of services
                                 @if (Model.TermsOfServiceEnabled)
                                 {
                                     <text>
                                         if (!$('#termsofservice').is(':checked')) {
-                                            alert('@T("Checkout.TermsOfService.PleaseAccept")');
+                                            alertMessage = '@T("Checkout.TermsOfService.PleaseAccept")';
                                             termOfServiceOk = false;
                                         }
                                         else {
@@ -89,8 +99,35 @@
                                         }
                                     </text>
                                 }
-								
-                            	if (termOfServiceOk) {
+
+                            	// agree user agreement for downloadable products
+                            	$('ul.list-order-products').find('input[name^=AgreeUserAgreement]').each(function () {
+                            		if (!$(this).is(':checked')) {
+                            			userAgreementsOk = false;
+                            			if (!alertMessage) {
+                            				alertMessage = '@T("Checkout.DownloadUserAgreement.PleaseAgree")';
+                            			}
+                            			return false;
+                            		}
+                            	});
+
+                            	// agree esd revocation waiver
+								@if(Model.ShowEsdRevocationWaiverBox)
+								{
+									<text>
+                            		$('ul.list-order-products').find('input[name^=AgreeEsdRevocationWaiver]').each(function () {
+                            			if (!$(this).is(':checked')) {
+                            				esdRevocationWaiverOk = false;
+                            				if (!alertMessage) {
+                            					alertMessage = '@T("Checkout.EsdRevocationWaiverConfirmation.PleaseAgree")';
+                            				}
+                            				return false;
+                            			}
+                            		});
+                            		</text>
+								}
+
+                            	if (termOfServiceOk && userAgreementsOk && esdRevocationWaiverOk) {
                             		var submitOrderEvent = jQuery.Event('submitOrder');
                             		submitOrderEvent.isOrderValid = true;
                             		submitOrderEvent.isMobile = true;
@@ -100,7 +137,10 @@
                             		if (true === submitOrderEvent.isOrderValid) {
                             			$('#confirm-order-form').submit();
                             		}
-                                }
+                            	}
+                            	else if (alertMessage) {
+                            		alert(alertMessage);
+                            	}
                             });
                         });
                     </script>

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Threading;
 using System.Web.Mvc;
 using SmartStore.Admin.Extensions;
@@ -13,10 +14,11 @@ using SmartStore.Services.Tasks;
 using SmartStore.Web.Framework.Controllers;
 using SmartStore.Web.Framework.Filters;
 using SmartStore.Web.Framework.Security;
+using SmartStore.Core;
 
 namespace SmartStore.Admin.Controllers
 {
-    [AdminAuthorize]
+	[AdminAuthorize]
     public partial class ScheduleTaskController : AdminControllerBase
     {
 		private readonly IScheduleTaskService _scheduleTaskService;
@@ -24,19 +26,22 @@ namespace SmartStore.Admin.Controllers
         private readonly IPermissionService _permissionService;
         private readonly IDateTimeHelper _dateTimeHelper;
 		private readonly ILocalizationService _localizationService;
+        private readonly IWorkContext _workContext;
 
-		public ScheduleTaskController(
+        public ScheduleTaskController(
             IScheduleTaskService scheduleTaskService, 
             ITaskScheduler taskScheduler, 
             IPermissionService permissionService, 
             IDateTimeHelper dateTimeHelper,
-			ILocalizationService localizationService)
+			ILocalizationService localizationService,
+            IWorkContext workContext)
         {
             this._scheduleTaskService = scheduleTaskService;
 			this._taskScheduler = taskScheduler;
             this._permissionService = permissionService;
             this._dateTimeHelper = dateTimeHelper;
 			this._localizationService = localizationService;
+            this._workContext = workContext;
         }
 
 		private bool IsTaskVisible(ScheduleTask task)
@@ -52,7 +57,30 @@ namespace SmartStore.Admin.Controllers
 			return false;
 		}
 
-        public ActionResult Index()
+		private string GetTaskMessage(ScheduleTask task, string resourceKey)
+		{
+			string message = null;
+
+			var taskClassName = task.Type
+				.SplitSafe(",")
+				.SafeGet(0)
+				.SplitSafe(".")
+				.LastOrDefault();
+
+			if (taskClassName.HasValue())
+			{
+				message = _localizationService.GetResource(string.Concat(resourceKey, ".", taskClassName), returnEmptyIfNotFound: true);
+			}
+
+			if (message.IsEmpty())
+			{
+				message = T(resourceKey);
+			}
+
+			return message;
+		}
+
+		public ActionResult Index()
         {
             return RedirectToAction("List");
         }
@@ -114,9 +142,10 @@ namespace SmartStore.Admin.Controllers
 			if (!_permissionService.Authorize(StandardPermissionProvider.ManageScheduleTasks))
 				return AccessDeniedView();
 
-			returnUrl = returnUrl.NullEmpty() ?? Request.UrlReferrer.ToString();
+            var taskParams = new Dictionary<string, string>();
+            taskParams[TaskExecutor.CurrentCustomerIdParamName] = _workContext.CurrentCustomer.Id.ToString();
 
-            _taskScheduler.RunSingleTask(id);
+            _taskScheduler.RunSingleTask(id, taskParams);
 
 			// The most tasks are completed rather quickly. Wait a while...
 			var start = DateTime.UtcNow;
@@ -128,7 +157,7 @@ namespace SmartStore.Admin.Controllers
 			{
 				if (task.IsRunning)
 				{
-					NotifyInfo(T("Admin.System.ScheduleTasks.RunNow.Progress"));
+					NotifyInfo(GetTaskMessage(task, "Admin.System.ScheduleTasks.RunNow.Progress"));
 				}
 				else
 				{
@@ -138,13 +167,12 @@ namespace SmartStore.Admin.Controllers
 					}
 					else
 					{
-						NotifySuccess(T("Admin.System.ScheduleTasks.RunNow.Success"));
+						NotifySuccess(GetTaskMessage(task, "Admin.System.ScheduleTasks.RunNow.Success"));
 					}
 				}
-				var now = DateTime.UtcNow;
 			}
 
-			return Redirect(returnUrl);
+			return RedirectToReferrer(returnUrl);
 		}
 
 		public ActionResult CancelJob(int id /* scheduleTaskId */, string returnUrl = "")
@@ -159,8 +187,7 @@ namespace SmartStore.Admin.Controllers
 				NotifyWarning(T("Admin.System.ScheduleTasks.CancellationRequested"));
 			}
 
-			returnUrl = returnUrl.NullEmpty() ?? Request.UrlReferrer.ToString();
-			return Redirect(returnUrl);
+			return RedirectToReferrer(returnUrl);
 		}
 
 		public ActionResult Edit(int id /* taskId */, string returnUrl = null)
@@ -195,7 +222,7 @@ namespace SmartStore.Admin.Controllers
 			}
 
 			var reloadResult = RedirectToAction("Edit", new { id = model.Id, returnUrl = returnUrl });
-			var returnResult = Redirect(returnUrl.NullEmpty() ?? Url.Action("List"));
+			var returnResult = RedirectToReferrer(returnUrl, () => RedirectToAction("List"));
 
 			var scheduleTask = _scheduleTaskService.GetTaskById(model.Id);
 			if (scheduleTask == null)
@@ -246,7 +273,7 @@ namespace SmartStore.Admin.Controllers
 		}
 
 		[ChildActionOnly]
-		public ActionResult MinimalTask(int taskId, string returnUrl /* mandatory on purpose */, bool cancellable = true)
+		public ActionResult MinimalTask(int taskId, string returnUrl /* mandatory on purpose */, bool cancellable = true, bool reloadPage = false)
 		{
 			var task = _scheduleTaskService.GetTaskById(taskId);
 			if (task == null)
@@ -257,6 +284,7 @@ namespace SmartStore.Admin.Controllers
 			ViewBag.HasPermission = _permissionService.Authorize(StandardPermissionProvider.ManageScheduleTasks);
 			ViewBag.ReturnUrl = returnUrl;
 			ViewBag.Cancellable = cancellable;
+			ViewBag.ReloadPage = reloadPage;
 
 			var model = task.ToScheduleTaskModel(_localizationService, _dateTimeHelper, Url);
 
